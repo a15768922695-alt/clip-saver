@@ -142,7 +142,7 @@
     draftImage = c.toDataURL('image/jpeg', 0.82);
     $('#preview').src = draftImage; $('#preview').hidden = false;
     document.querySelector('.drop-hint').style.display = 'none';
-    $('#saveBtn').disabled = false;
+    updateSaveState();
     closeCropper();
   }
   function closeCropper() { cropModal.hidden = true; }
@@ -173,6 +173,7 @@
       view = view.filter(i =>
         (i.text || '').toLowerCase().includes(q) ||
         (i.title || '').toLowerCase().includes(q) ||
+        (i.link || '').toLowerCase().includes(q) ||
         (i.tags || []).join(' ').toLowerCase().includes(q));
     }
     const list = $('#list');
@@ -182,8 +183,8 @@
       return;
     }
     list.innerHTML = view.map((it, i) => {
-      const thumb = it.image ? '<img class="thumb" src="' + it.image + '">' : '<div class="thumb empty"></div>';
-      const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 50) || (it.tags || []).join(' ') || '（仅图片）';
+      const thumb = it.image ? '<img class="thumb" src="' + it.image + '">' : '<div class="thumb empty">🔗</div>';
+      const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 50) || (it.tags || []).join(' ') || (it.link ? '🔗 ' + it.link : '') || '（仅图片）';
       return '<div class="card" data-id="' + it.id + '">' +
         '<div class="seq">' + (i + 1) + '</div>' + thumb +
         '<div class="body">' + chip(it.category) +
@@ -209,6 +210,18 @@
     return (s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   }
 
+  // 仅允许 http/https 链接，避免 javascript: 等危险协议
+  function safeUrl(u) {
+    try { const p = new URL(u); if (p.protocol === 'http:' || p.protocol === 'https:') return p.href; } catch (e) {}
+    return '';
+  }
+
+  // 有图 / 有链接 / 有标题 / 有文字 任一即可保存
+  function updateSaveState() {
+    const has = draftImage || $('#title').value.trim() || $('#link').value.trim() || $('#text').value.trim();
+    $('#saveBtn').disabled = !has;
+  }
+
   // ---------- 全屏看图 ----------
   function openLightbox(src) {
     if (!src) return;
@@ -230,6 +243,7 @@
       '<h3>' + escapeHtml(it.title || '未命名') + '</h3>' +
       (it.tags && it.tags.length ? '<div class="tags">' + it.tags.map(t => '<span class="tag">#' + escapeHtml(t) + '</span>').join('') + '</div>' : '') +
       (it.text ? '<div class="text">' + escapeHtml(it.text) + '</div>' : '') +
+      (it.link ? (function () { const u = safeUrl(it.link); return u ? '<a class="link" href="' + u + '" target="_blank" rel="noopener">🔗 ' + escapeHtml(it.link) + '</a>' : '<div class="link-text">🔗 ' + escapeHtml(it.link) + '</div>'; })() : '') +
       '<div class="time">创建：' + new Date(it.created).toLocaleString('zh-CN') +
       (it.updated && it.updated !== it.created ? '　·　更新：' + new Date(it.updated).toLocaleString('zh-CN') : '') + '</div>' +
       '</div>';
@@ -239,28 +253,31 @@
   // ---------- 表单 ----------
   function resetForm() {
     editingId = null; draftImage = null;
-    $('#title').value = ''; $('#tags').value = ''; $('#text').value = '';
+    $('#title').value = ''; $('#tags').value = ''; $('#text').value = ''; $('#link').value = '';
     $('#category').value = 'other'; $('#autoHint').textContent = '';
     $('#preview').hidden = true; $('#preview').src = '';
     document.querySelector('.drop-hint').style.display = '';
-    $('#saveBtn').disabled = true;
+    updateSaveState();
   }
   function loadToForm(it) {
     editingId = it.id; draftImage = it.image || null;
     $('#title').value = it.title || '';
+    $('#link').value = it.link || '';
     $('#category').value = it.category || 'other';
     $('#tags').value = (it.tags || []).join(', ');
     $('#text').value = it.text || '';
     if (it.image) { $('#preview').src = it.image; $('#preview').hidden = false; document.querySelector('.drop-hint').style.display = 'none'; }
-    $('#saveBtn').disabled = false;
+    updateSaveState();
     showView('add');
   }
 
   async function save() {
     const text = $('#text').value.trim();
-    const title = $('#title').value.trim() || (text.split('\n')[0].slice(0, 40)) || '未命名';
+    const link = $('#link').value.trim();
+    const title = $('#title').value.trim() || (text.split('\n')[0].slice(0, 40)) || (link ? link : '未命名');
     const item = {
       title,
+      link,
       category: $('#category').value,
       tags: $('#tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
       text,
@@ -353,6 +370,8 @@
       catch { alert('请手动长按文字选择复制'); }
     });
     $('#saveBtn').addEventListener('click', save);
+    // 链接/标题/文字任一有内容即可保存（支持只存链接不传图）
+    ['#title', '#link', '#text'].forEach(sel => $(sel).addEventListener('input', updateSaveState));
 
     // 详情操作
     $('#editBtn').addEventListener('click', () => { if (state.currentId != null) getById(state.currentId).then(loadToForm); });
