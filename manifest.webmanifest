@@ -1,0 +1,16 @@
+{
+  "name": "随手收藏 · 截图收纳",
+  "short_name": "收藏夹",
+  "description": "上传截图自动分类，文字内容 OCR 识别保存",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f6fa",
+  "theme_color": "#6c5ce7",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-apple.png", "sizes": "180x180", "type": "image/png"}
+  ]
+}

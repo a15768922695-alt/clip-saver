@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="收藏夹">
+<meta name="theme-color" content="#6c5ce7">
+<title>随手收藏</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-apple.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">📌 随手收藏</div>
+    <input id="search" class="search" type="search" placeholder="搜索文字 / 标签…" autocomplete="off">
+  </header>
+
+  <!-- 收藏列表 -->
+  <section id="view-library" class="view active">
+    <div id="filters" class="filters"></div>
+    <div id="list" class="list"></div>
+    <div id="empty" class="empty" hidden>还没有收藏，点下面的 ➕ 添加截图吧</div>
+  </section>
+
+  <!-- 添加 -->
+  <section id="view-add" class="view">
+    <div class="add-wrap">
+      <label id="drop" class="drop">
+        <input id="file" type="file" accept="image/*" hidden>
+        <div class="preview-box">
+          <div class="drop-hint">📷 点击选择截图<br><small>从相册选择或拍照</small></div>
+          <img id="preview" class="preview-img" hidden>
+        </div>
+      </label>
+      <label class="field">
+        <span>标题（自动生成，可改）</span>
+        <input id="title" type="text" placeholder="如：想看的书 / 一条文案">
+      </label>
+      <label class="field">
+        <span>分类</span>
+        <select id="category"></select>
+      </label>
+      <label class="field">
+        <span>标签（逗号分隔）</span>
+        <input id="tags" type="text" placeholder="如：待读, 送礼物">
+      </label>
+      <label class="field">
+        <span>备注 / 文字（可选，手动输入）</span>
+        <textarea id="text" rows="5" placeholder="可手动记下这张截图的内容、链接、想法…"></textarea>
+        <div class="row between">
+          <button id="copyBtn" class="btn tiny" type="button">📋 复制文字</button>
+          <span id="autoHint" class="auto-hint"></span>
+        </div>
+      </label>
+      <button id="saveBtn" class="btn primary" disabled>💾 保存到收藏</button>
+    </div>
+  </section>
+
+  <!-- 详情 -->
+  <section id="view-detail" class="view">
+    <div id="detail" class="detail"></div>
+    <div class="row detail-actions">
+      <button id="editBtn" class="btn">✏️ 编辑</button>
+      <button id="delBtn" class="btn danger">🗑 删除</button>
+    </div>
+  </section>
+
+  <!-- 关于 -->
+  <section id="view-about" class="view">
+    <div class="about">
+      <h3>关于「随手收藏」</h3>
+      <p>一个放在手机首页的私人截图收纳盒。上传截图 → 裁剪 → 自动分类 → 保存。</p>
+      <p><b>添加到主屏幕：</b>在 iPhone 的 Safari 打开本页面 → 点底部「分享」按钮 →「添加到主屏幕」。</p>
+      <p>数据保存在本机浏览器（IndexedDB），<b>不上传任何服务器</b>。可随时导出备份。</p>
+      <hr>
+      <p class="muted">分类：电影/剧集 · 书籍 · 穿搭好物 · 美食 · 文字摘抄 · 其他</p>
+      <button id="exportBtn" class="btn">⬇️ 导出备份 (JSON)</button>
+      <button id="importBtn" class="btn ghost">⬆️ 导入备份</button>
+      <input id="importFile" type="file" accept="application/json" hidden>
+    </div>
+  </section>
+
+  <nav class="tabbar">
+    <button class="tab active" data-view="library">📚<span>收藏</span></button>
+    <button class="tab" data-view="add">➕<span>添加</span></button>
+    <button class="tab" data-view="about">❓<span>关于</span></button>
+  </nav>
+
+  <!-- 裁剪 -->
+  <div id="cropModal" class="crop-modal" hidden>
+    <div class="crop-head">✂️ 调整裁剪区域</div>
+    <div id="cropStage" class="crop-stage">
+      <img id="cropImg" class="crop-img" alt="">
+      <div id="cropBox" class="crop-box">
+        <span class="h h-nw" data-h="nw"></span>
+        <span class="h h-ne" data-h="ne"></span>
+        <span class="h h-sw" data-h="sw"></span>
+        <span class="h h-se" data-h="se"></span>
+      </div>
+    </div>
+    <div class="crop-foot">
+      <button id="cropCancel" class="btn ghost">取消</button>
+      <button id="cropReset" class="btn ghost">满屏</button>
+      <button id="cropConfirm" class="btn primary">确定裁剪</button>
+    </div>
+  </div>
+
+  <!-- 确认弹窗（删除用，避免 iOS 原生 confirm 不弹窗导致删不掉） -->
+  <div id="confirmModal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-text" id="confirmText">确定删除这条收藏？</div>
+      <div class="modal-actions">
+        <button id="confirmCancel" class="btn ghost">取消</button>
+        <button id="confirmOk" class="btn danger">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全屏看图（点击图片弹出，可双指缩放，点背景或 × 关闭） -->
+  <div id="lightbox" class="lightbox" hidden>
+    <button id="lightboxClose" class="lightbox-close" type="button" aria-label="关闭">×</button>
+    <img id="lightboxImg" alt="查看大图">
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
