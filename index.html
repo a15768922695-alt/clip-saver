@@ -47,13 +47,11 @@
   <!-- 添加 -->
   <section id="view-add" class="view">
     <div class="add-wrap">
-      <label id="drop" class="drop">
-        <input id="file" type="file" accept="image/*" hidden>
-        <div class="preview-box">
-          <div class="drop-hint">📷 点击选择截图<br><small>从相册选择或拍照</small></div>
-          <img id="preview" class="preview-img" hidden>
-        </div>
-      </label>
+      <div class="preview-box">
+        <div id="previewGrid" class="preview-grid"></div>
+      </div>
+      <input id="file" type="file" accept="image/*" multiple hidden>
+      <p class="hint-line">可一次多选多张图片（如家装同一套图）</p>
       <label class="field">
         <span>文字内容（想记的话直接粘这里）</span>
         <textarea id="text" rows="5" placeholder="比如一句想存的话、一段文案、读书笔记…"></textarea>
@@ -147,10 +145,13 @@
     </div>
   </div>
 
-  <!-- 全屏看图（点击图片弹出，可双指缩放，点背景或 × 关闭） -->
+  <!-- 全屏看图（点击图片弹出，可左右翻页，点背景或 × 关闭） -->
   <div id="lightbox" class="lightbox" hidden>
     <button id="lightboxClose" class="lightbox-close" type="button" aria-label="关闭">×</button>
+    <button id="lightboxPrev" class="lightbox-nav prev" type="button" aria-label="上一张">‹</button>
     <img id="lightboxImg" alt="查看大图">
+    <button id="lightboxNext" class="lightbox-nav next" type="button" aria-label="下一张">›</button>
+    <div id="lightboxCount" class="lightbox-count"></div>
   </div>
 
   <!-- 从文字中选标题 -->
@@ -205,7 +206,7 @@
     </div>
   </div>
 
-  <div class="ver">v13</div>
+  <div class="ver">v14</div>
 </div>
 <script src="app.js"></script>
 </body>

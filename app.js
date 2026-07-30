@@ -91,10 +91,12 @@
   async function getById(id) { const d = await db(); return reqP(d.transaction('items', 'readonly').objectStore('items').get(id)); }
 
   // ---------- 状态 ----------
-  const state = { filter: 'all', q: '', currentId: null };
-  let draftImage = null;   // 当前草稿图片 dataURL
+  const state = { filter: 'all', q: '', currentId: null, currentImages: [] };
+  let draftImages = [];   // 当前草稿图片 dataURL 数组（支持多图）
   let editingId = null;    // 编辑中的条目 id
   let confirmResolve = null; // 自定义确认弹窗的 resolve
+  let cropQueue = [];      // 待裁剪的图片队列
+  let cropReplaceIndex = null; // 若重裁某张，确定为替换该下标；否则追加到末尾
 
   // ---------- 视图切换 ----------
   function showView(name) {
@@ -180,7 +182,8 @@
     } catch (_) { return dataUrl; }
   }
 
-  function openCropper(dataUrl) {
+  function openCropper(dataUrl, replaceIndex) {
+    cropReplaceIndex = (replaceIndex == null) ? null : replaceIndex;
     cropModal.hidden = false;
     cropImg.onload = () => {
       const maxW = window.innerWidth - 28;
@@ -249,13 +252,40 @@
     const c = document.createElement('canvas');
     c.width = outW; c.height = outH;
     c.getContext('2d').drawImage(cropImg, sx, sy, sw, sh, 0, 0, outW, outH);
-    draftImage = c.toDataURL('image/jpeg', 0.82);
-    $('#preview').src = draftImage; $('#preview').hidden = false;
-    document.querySelector('.drop-hint').style.display = 'none';
+    const data = c.toDataURL('image/jpeg', 0.82);
+    if (cropReplaceIndex != null) { draftImages[cropReplaceIndex] = data; cropReplaceIndex = null; }
+    else draftImages.push(data);
+    renderPreview();
     updateSaveState();
-    closeCropper();
+    nextCrop(); // 继续裁下一张，队列空则关闭
   }
+  // 处理裁剪队列：还有图就开裁，没有就收工
+  function nextCrop() {
+    if (cropQueue.length) { openCropper(cropQueue.shift(), null); }
+    else { cropModal.hidden = true; cropReplaceIndex = null; }
+  }
+  // 取消当前这张：跳过它，继续下一张（队列空则关闭）
+  function skipCrop() { cropReplaceIndex = null; nextCrop(); }
   function closeCropper() { cropModal.hidden = true; }
+
+  // 渲染添加页多图预览网格
+  function renderPreview() {
+    const grid = $('#previewGrid');
+    if (!grid) return;
+    if (!draftImages.length) {
+      grid.innerHTML = '<div class="add-tile" id="addTile">📷<span><br>添加图片<br><small>可多选，一次多张</small></span></div>';
+      return;
+    }
+    grid.innerHTML = draftImages.map((src, i) =>
+      '<div class="pv-item" data-i="' + i + '"><img src="' + src + '">' +
+      '<button class="pv-del" type="button" data-i="' + i + '" aria-label="删除">×</button></div>'
+    ).join('') + '<div class="add-tile" id="addTile">＋<br><small>继续添加</small></div>';
+  }
+  // 点击已选缩略图 → 重新裁剪该张
+  function recrop(i) {
+    if (i < 0 || i >= draftImages.length) return;
+    openCropper(draftImages[i], i);
+  }
 
   // ---------- 分类标签（带序号小色圈，去长方形） ----------
   function chip(cat) {
@@ -386,7 +416,8 @@
     }
     list.innerHTML = view.map((it, i) => {
       const c = CAT_MAP[it.category] || CAT_MAP.other;
-      const thumbSrc = it.image || (it.text ? generateTextThumb(it.text, c.color) : (it.thumb || ''));
+      const imgs = getImages(it);
+      const thumbSrc = imgs[0] || (it.text ? generateTextThumb(it.text, c.color) : (it.thumb || ''));
       const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">📝</div>';
       const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 80) || (it.tags || []).join(' ') || (it.link ? '🔗 ' + it.link : '') || '';
       return '<div class="card" data-id="' + it.id + '">' + thumb +
@@ -515,6 +546,12 @@
   function escapeHtml(s) {
     return (s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   }
+  // 取得条目全部图片（兼容旧版单图字段 image）
+  function getImages(it) {
+    if (it && Array.isArray(it.images) && it.images.length) return it.images;
+    if (it && it.image) return [it.image];
+    return [];
+  }
   // 显示标题时自动回退：自定义标题 > 文字第一行 > 链接 > 柔和兜底
   function titleOf(it) {
     const t = (it.title || '').trim();
@@ -606,25 +643,59 @@
 
   // 有图 / 有链接 / 有标题 / 有文字 任一即可保存
   function updateSaveState() {
-    const has = draftImage || $('#title').value.trim() || $('#link').value.trim() || $('#text').value.trim();
+    const has = draftImages.length || $('#title').value.trim() || $('#link').value.trim() || $('#text').value.trim();
     $('#saveBtn').disabled = !has;
   }
 
-  // ---------- 全屏看图 ----------
-  function openLightbox(src) {
-    if (!src) return;
-    $('#lightboxImg').src = src;
+  // ---------- 全屏看图（支持一组图左右翻阅） ----------
+  let lightboxList = [];
+  let lightboxIdx = 0;
+  function openLightbox(list, idx) {
+    lightboxList = Array.isArray(list) ? list.slice() : [list];
+    lightboxIdx = idx || 0;
+    if (!lightboxList.length) return;
+    showLightbox();
+  }
+  function showLightbox() {
+    if (!lightboxList.length) { $('#lightbox').hidden = true; return; }
+    $('#lightboxImg').src = lightboxList[lightboxIdx];
+    const multi = lightboxList.length > 1;
+    $('#lightboxPrev').style.display = multi ? 'block' : 'none';
+    $('#lightboxNext').style.display = multi ? 'block' : 'none';
+    $('#lightboxCount').style.display = multi ? 'block' : 'none';
+    $('#lightboxCount').textContent = (lightboxIdx + 1) + ' / ' + lightboxList.length;
     $('#lightbox').hidden = false;
   }
-  function closeLightbox() { $('#lightbox').hidden = true; $('#lightboxImg').src = ''; }
+  function lbStep(d) {
+    if (!lightboxList.length) return;
+    lightboxIdx = (lightboxIdx + d + lightboxList.length) % lightboxList.length;
+    showLightbox();
+  }
+  function closeLightbox() { $('#lightbox').hidden = true; $('#lightboxImg').src = ''; lightboxList = []; }
 
   // ---------- 详情 ----------
   async function openDetail(id) {
     const it = await getById(id);
     if (!it) return;
     state.currentId = id;
+    const imgs = getImages(it);
+    state.currentImages = imgs;
+    let galleryHtml = '';
+    if (imgs.length === 1) {
+      galleryHtml = '<figure class="shot" data-i="0"><img src="' + imgs[0] + '"><figcaption>👆 点击图片看大图</figcaption></figure>';
+    } else if (imgs.length > 1) {
+      galleryHtml = '<div class="gallery" id="gallery">' +
+        '<div class="g-track" id="gTrack">' +
+          imgs.map((s, i) => '<div class="g-slide" data-i="' + i + '"><img src="' + s + '"></div>').join('') +
+        '</div>' +
+        '<button class="g-nav g-prev" data-d="-1" type="button" aria-label="上一张">‹</button>' +
+        '<button class="g-nav g-next" data-d="1" type="button" aria-label="下一张">›</button>' +
+        '<div class="g-dots">' + imgs.map((_, i) => '<span class="g-dot' + (i === 0 ? ' active' : '') + '" data-i="' + i + '"></span>').join('') + '</div>' +
+        '<div class="g-count"><span id="gCount">1</span>/' + imgs.length + '</div>' +
+      '</div>';
+    }
     $('#detail').innerHTML =
-      (it.image ? '<figure class="shot" id="detailShot"><img src="' + it.image + '"><figcaption>👆 点击图片看大图</figcaption></figure>' : '') +
+      galleryHtml +
       '<div class="meta">' +
       chip(it.category) +
       '<h3>' + escapeHtml(titleOf(it)) + '</h3>' +
@@ -634,26 +705,39 @@
       '<div class="time">创建：' + new Date(it.created).toLocaleString('zh-CN') +
       (it.updated && it.updated !== it.created ? '　·　更新：' + new Date(it.updated).toLocaleString('zh-CN') : '') + '</div>' +
       '</div>';
+    galleryIdx = 0;
     showView('detail');
+  }
+
+  // 详情画廊翻页
+  let galleryIdx = 0;
+  function setGallery(i) {
+    const track = $('#gTrack'); if (!track) return;
+    const n = track.children.length;
+    i = Math.max(0, Math.min(n - 1, i));
+    galleryIdx = i;
+    track.style.transform = 'translateX(' + (-i * 100) + '%)';
+    const dots = $('#gallery').querySelectorAll('.g-dot');
+    dots.forEach((d, k) => d.classList.toggle('active', k === i));
+    const c = $('#gCount'); if (c) c.textContent = i + 1;
   }
 
   // ---------- 表单 ----------
   function resetForm() {
-    editingId = null; draftImage = null;
+    editingId = null; draftImages = [];
     $('#title').value = ''; $('#tags').value = ''; $('#text').value = ''; $('#link').value = '';
     $('#category').value = 'other'; $('#autoHint').textContent = '';
-    $('#preview').hidden = true; $('#preview').src = '';
-    document.querySelector('.drop-hint').style.display = '';
+    renderPreview();
     updateSaveState();
   }
   function loadToForm(it) {
-    editingId = it.id; draftImage = it.image || null;
+    editingId = it.id; draftImages = getImages(it).slice();
     $('#title').value = titleOf(it);
     $('#link').value = it.link || '';
     $('#category').value = it.category || 'other';
     $('#tags').value = (it.tags || []).join(', ');
     $('#text').value = it.text || '';
-    if (it.image) { $('#preview').src = it.image; $('#preview').hidden = false; document.querySelector('.drop-hint').style.display = 'none'; }
+    renderPreview();
     updateSaveState(); updateAutoHint();
     showView('add');
   }
@@ -669,7 +753,7 @@
       category,
       tags: $('#tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
       text,
-      image: draftImage,
+      images: draftImages.slice(),
       created: editingId ? (await getById(editingId)).created : Date.now(),
       updated: Date.now()
     };
@@ -684,10 +768,14 @@
   async function init() {
     // 分类下拉
     rebuildCategorySelect();
+    renderPreview();
     await renderFilters(); render();
 
     // tab
-    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showView(t.dataset.view)));
+    document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+      showView(t.dataset.view);
+      if (t.dataset.view === 'add') renderPreview();
+    }));
 
     // 筛选
     $('#filters').addEventListener('click', e => {
@@ -705,8 +793,8 @@
       to = setTimeout(() => { state.q = e.target.value.trim(); render(); }, 200);
     });
 
-    // 列表点击（缩略图→看大图；其余→进详情；删除按钮→确认删除）
-    $('#list').addEventListener('click', e => {
+    // 列表点击（缩略图→看大图(全部图)；其余→进详情；删除按钮→确认删除）
+    $('#list').addEventListener('click', async e => {
       const delBtn = e.target.closest('.del');
       if (delBtn) {
         e.stopPropagation();
@@ -714,40 +802,83 @@
         askConfirm('确定删除这条收藏？').then(ok => { if (ok) delItem(id).then(render); });
         return;
       }
+      const card = e.target.closest('.card'); if (!card) return;
+      const id = Number(card.dataset.id);
       const thumb = e.target.closest('.thumb');
       if (thumb) {
-        const src = thumb.getAttribute('src');
-        if (src) { openLightbox(src); return; }
+        const it = await getById(id);
+        const imgs = getImages(it);
+        if (imgs.length) { openLightbox(imgs, 0); return; }
       }
-      const card = e.target.closest('.card'); if (card) openDetail(Number(card.dataset.id));
+      openDetail(id);
     });
 
-    // 详情页：点击图片弹大图
+    // 详情页：点图片→大图（整组翻阅）；画廊圆点/左右按钮→翻页
     $('#detail').addEventListener('click', e => {
-      const shot = e.target.closest('.shot');
-      if (shot) {
-        const img = shot.querySelector('img');
-        if (img && img.src) openLightbox(img.src);
+      const fig = e.target.closest('.shot, .g-slide');
+      if (fig) {
+        const i = fig.dataset.i ? Number(fig.dataset.i) : 0;
+        if (state.currentImages && state.currentImages[i]) openLightbox(state.currentImages, i);
+        return;
       }
+      const dot = e.target.closest('.g-dot');
+      if (dot) { setGallery(Number(dot.dataset.i)); return; }
+      const nav = e.target.closest('.g-nav');
+      if (nav) { setGallery(galleryIdx + Number(nav.dataset.d)); return; }
     });
 
-    // 全屏看图：关闭按钮 / 点背景 / 返回手势
+    // 全屏看图：关闭 / 点背景 / 左右翻页 / 滑动切换
     $('#lightboxClose').addEventListener('click', closeLightbox);
     $('#lightbox').addEventListener('click', e => { if (e.target === $('#lightbox')) closeLightbox(); });
+    $('#lightboxPrev').addEventListener('click', e => { e.stopPropagation(); lbStep(-1); });
+    $('#lightboxNext').addEventListener('click', e => { e.stopPropagation(); lbStep(1); });
+    let lbStartX = 0, lbStartY = 0;
+    $('#lightbox').addEventListener('touchstart', e => { lbStartX = e.touches[0].clientX; lbStartY = e.touches[0].clientY; }, { passive: true });
+    $('#lightbox').addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - lbStartX;
+      const dy = e.changedTouches[0].clientY - lbStartY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) lbStep(dx < 0 ? 1 : -1);
+    }, { passive: true });
 
-    // 选图 → 进入裁剪
+    // 选图 → 进入裁剪（支持一次多选多张，逐张裁剪后全部收入草稿）
     $('#file').addEventListener('change', async e => {
-      const f = e.target.files[0]; if (!f) return;
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const fixed = await fixOrientation(reader.result); // 先摆正方向，再进入裁剪
-        openCropper(fixed);
-      };
-      reader.readAsDataURL(f);
+      const files = Array.from(e.target.files || []);
       e.target.value = '';
+      if (!files.length) return;
+      for (const f of files) {
+        const dataUrl = await new Promise(res => {
+          const r = new FileReader();
+          r.onload = () => res(r.result);
+          r.readAsDataURL(f);
+        });
+        cropQueue.push(await fixOrientation(dataUrl)); // 先摆正方向
+      }
+      if (cropModal.hidden) nextCrop();
     });
 
-    $('#cropCancel').addEventListener('click', closeCropper);
+    // 添加页多图网格交互：加图 / 删除某张 / 点缩略图重裁
+    $('#previewGrid').addEventListener('click', e => {
+      if (e.target.closest('#addTile')) { $('#file').click(); return; }
+      const del = e.target.closest('.pv-del');
+      if (del) { draftImages.splice(Number(del.dataset.i), 1); renderPreview(); updateSaveState(); return; }
+      const item = e.target.closest('.pv-item');
+      if (item) recrop(Number(item.dataset.i));
+    });
+
+    // 详情画廊滑动切换
+    let gStartX = 0, gStartY = 0;
+    $('#detail').addEventListener('touchstart', e => {
+      if (!e.target.closest('.gallery')) return;
+      gStartX = e.touches[0].clientX; gStartY = e.touches[0].clientY;
+    }, { passive: true });
+    $('#detail').addEventListener('touchend', e => {
+      if (!e.target.closest('.gallery')) return;
+      const dx = e.changedTouches[0].clientX - gStartX;
+      const dy = e.changedTouches[0].clientY - gStartY;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) setGallery(galleryIdx + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+
+    $('#cropCancel').addEventListener('click', skipCrop);
     $('#cropReset').addEventListener('click', () => {
       const dw = cropFrame.clientWidth, dh = cropFrame.clientHeight;
       cropState = { left: 0, top: 0, w: dw, h: dh };

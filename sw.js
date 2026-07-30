@@ -1,4 +1,4 @@
-const CACHE = 'clip-saver-v13';
+const CACHE = 'clip-saver-v14';
 const ASSETS = [
   './',
   './index.html',
