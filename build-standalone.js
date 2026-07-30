@@ -69,7 +69,7 @@ html = html.replace(/<link rel="manifest" href="manifest\.webmanifest">\n/, '');
 html = html.replace(/<link rel="apple-touch-icon" href="icon-apple\.png">\n/, '');
 
 // 4. 版本号提示改为 standalone
-html = html.replace(/<div class="ver">v\d+<\/div>/, '<div class="ver">v11-standalone</div>');
+html = html.replace(/<div class="ver">v\d+<\/div>/, '<div class="ver">v12-standalone</div>');
 
 fs.writeFileSync(path.join(root, 'clip-saver-standalone.html'), html, 'utf8');
 console.log('clip-saver-standalone.html generated:', html.length, 'chars');
