@@ -165,3 +165,5 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .modal-text{font-size:16px;margin-bottom:18px;color:var(--ink);}
 .modal-actions{display:flex;gap:10px;}
 .modal-actions .btn{flex:1;}
+
+.ver{text-align:center;color:var(--muted);font-size:11px;padding:8px 0 16px;}
