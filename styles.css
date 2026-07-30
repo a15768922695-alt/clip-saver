@@ -72,6 +72,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
   font-family:inherit;}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);}
 .field textarea{resize:vertical;}
+.title-row{display:flex;gap:8px;align-items:center;}
+.title-row input{flex:1;}
+.title-row .btn{flex:0 0 auto;white-space:nowrap;}
 .auto-hint{font-size:12px;color:var(--primary);font-weight:600;}
 .ocr-status{font-size:13px;color:#636e72;background:#fff;border-radius:10px;
   padding:8px 10px;border:1px solid var(--line);}
@@ -167,3 +170,13 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .modal-actions .btn{flex:1;}
 
 .ver{text-align:center;color:var(--muted);font-size:11px;padding:8px 0 16px;}
+
+/* 底部标题选择面板 */
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:110;background:#fff;border-radius:18px 18px 0 0;
+  box-shadow:0 -4px 30px rgba(0,0,0,.15);max-width:560px;margin:0 auto;padding:0 0 env(safe-area-inset-bottom);}
+.sheet[hidden]{display:none;}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 8px;font-size:15px;font-weight:600;}
+.sheet-body{max-height:50vh;overflow:auto;-webkit-overflow-scrolling:touch;padding:0 16px 16px;}
+.sheet-item{display:block;width:100%;text-align:left;border:none;background:#f7f7f9;border-radius:12px;
+  padding:12px 14px;margin-bottom:8px;font-size:15px;line-height:1.5;color:var(--ink);font-family:inherit;}
+.sheet-item:active{background:#efeafc;}

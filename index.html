@@ -51,7 +51,10 @@
       </label>
       <label class="field">
         <span>标题（自动生成，可改）</span>
-        <input id="title" type="text" placeholder="如：想看的书 / 一条文案">
+        <div class="title-row">
+          <input id="title" type="text" placeholder="如：想看的书 / 一条文案">
+          <button id="pickTitleBtn" class="btn tiny" type="button">从文字选</button>
+        </div>
       </label>
       <label class="field">
         <span>分类</span>
@@ -133,7 +136,16 @@
     <img id="lightboxImg" alt="查看大图">
   </div>
 
-  <div class="ver">v9</div>
+  <!-- 从文字中选标题 -->
+  <div id="titlePicker" class="sheet" hidden>
+    <div class="sheet-head">
+      <span>选一句作为标题</span>
+      <button id="titlePickerClose" class="btn tiny" type="button">取消</button>
+    </div>
+    <div id="titlePickerBody" class="sheet-body"></div>
+  </div>
+
+  <div class="ver">v10</div>
 </div>
 <script src="app.js"></script>
 </body>
