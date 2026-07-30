@@ -3,38 +3,66 @@
 
   const $ = s => document.querySelector(s);
 
-  // ---------- 分类配置（可在此增删分类与关键词） ----------
-  const CATEGORIES = [
+  // ---------- 分类（默认 + 用户自定义，可增删改，全部存本地） ----------
+  const DEFAULT_CATS = [
     { key: 'movie',   name: '电影/剧集', color: '#e17055', keywords: ['电影', '豆瓣', '评分', '导演', '主演', '观影', 'imdb', '票房', '电视剧', '综艺', '纪录片', '影院', '剧', '追剧'] },
     { key: 'book',    name: '书籍',      color: '#0984e3', keywords: ['书', '作者', '出版', '小说', '书单', '豆瓣读书', 'kindle', '阅读', '出版社', '文库', '读', '新书'] },
-    { key: 'fashion', name: '穿搭好物',  color: '#e84393', keywords: ['穿搭', '同款', '衣服', '裙子', '外套', '淘宝', '好物', '购买', '拼多多', '京东', '小红书', '种草', '颜值', '链接', '搭配', '包', '鞋', '淘宝', '天猫'] },
-    { key: 'food',    name: '美食',      color: '#00b894', keywords: ['美食', '菜谱', '餐厅', '好吃', '探店', '做法', '食谱', '料理', '甜品', '咖啡', '探店'] },
-    { key: 'quote',   name: '文字摘抄',  color: '#6c5ce7', keywords: ['句子', '语录', '名言', '文案', '摘抄', '金句', '段落', '治愈', '诗词', '文案', '短句'] },
+    { key: 'fashion', name: '穿搭好物',  color: '#e84393', keywords: ['穿搭', '同款', '衣服', '裙子', '外套', '淘宝', '好物', '购买', '拼多多', '京东', '小红书', '种草', '颜值', '链接', '搭配', '包', '鞋', '天猫'] },
+    { key: 'food',    name: '美食',      color: '#00b894', keywords: ['美食', '菜谱', '餐厅', '好吃', '探店', '做法', '食谱', '料理', '甜品', '咖啡'] },
+    { key: 'quote',   name: '文字摘抄',  color: '#6c5ce7', keywords: ['句子', '语录', '名言', '文案', '摘抄', '金句', '段落', '治愈', '诗词', '短句'] },
     { key: 'other',   name: '其他',      color: '#636e72', keywords: [] }
   ];
-  const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
+  const CATS_KEY = 'clipSaverCats';
   const CAT_ORDER_KEY = 'clipSaverCatOrder';
 
+  function loadCats() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CATS_KEY) || 'null');
+      if (Array.isArray(saved) && saved.length && saved.every(c => c && c.key && c.name && c.color)) return saved;
+    } catch (_) {}
+    // 首次运行：用默认分类初始化（深拷贝，关键词可单独编辑）
+    return DEFAULT_CATS.map(c => Object.assign({}, c, { keywords: (c.keywords || []).slice() }));
+  }
+  function saveCats() { try { localStorage.setItem(CATS_KEY, JSON.stringify(CATS)); } catch (_) {} }
+  let CATS = loadCats();
+  let CAT_MAP = {};
+  function rebuildCatMap() { CAT_MAP = Object.fromEntries(CATS.map(c => [c.key, c])); }
+  rebuildCatMap();
+
   function getCatOrder() {
+    const keys = CATS.map(c => c.key);
     try {
       const saved = JSON.parse(localStorage.getItem(CAT_ORDER_KEY) || 'null');
-      if (Array.isArray(saved) && saved.length === CATEGORIES.length && saved.every(k => CAT_MAP[k])) return saved;
+      if (Array.isArray(saved) && saved.length) {
+        const valid = saved.filter(k => keys.includes(k));
+        const missing = keys.filter(k => !valid.includes(k));
+        const result = valid.concat(missing);
+        if (result.length) return result;
+      }
     } catch (_) {}
-    return CATEGORIES.map(c => c.key);
+    return keys;
   }
-  function setCatOrder(keys) { localStorage.setItem(CAT_ORDER_KEY, JSON.stringify(keys)); }
-  function orderedCats() { return getCatOrder().map(k => CAT_MAP[k]); }
+  function setCatOrder(keys) { try { localStorage.setItem(CAT_ORDER_KEY, JSON.stringify(keys)); } catch (_) {} }
+  function orderedCats() { return getCatOrder().map(k => CAT_MAP[k]).filter(Boolean); }
 
   function classify(text) {
     const t = (text || '').toLowerCase();
     let best = { key: 'other', score: 0 };
-    for (const c of CATEGORIES) {
+    for (const c of CATS) {
       if (c.key === 'other') continue;
       let s = 0;
-      for (const k of c.keywords) if (t.includes(k.toLowerCase())) s++;
+      for (const k of (c.keywords || [])) if (t.includes(k.toLowerCase())) s++;
       if (s > best.score) best = { key: c.key, score: s };
     }
     return best.score > 0 ? best.key : 'other';
+  }
+
+  // 添加页分类下拉：按当前顺序重建，尽量保留已选值
+  function rebuildCategorySelect() {
+    const sel = $('#category');
+    const cur = sel.value;
+    sel.innerHTML = orderedCats().map(c => '<option value="' + c.key + '">' + c.name + '</option>').join('');
+    if (cur && CAT_MAP[cur]) sel.value = cur;
   }
 
   // ---------- IndexedDB ----------
@@ -318,7 +346,7 @@
       dragEl.style.opacity = '';
       const newOrder = Array.from($('#filters').querySelectorAll('.filter-item'))
         .map(x => x.dataset.f).filter(k => k && k !== 'all');
-      if (newOrder.length === CATEGORIES.length) setCatOrder(newOrder);
+      if (newOrder.length === CATS.length) setCatOrder(newOrder);
       dragEl = null; dragItems = [];
       // 重新渲染以应用新序号/位置
       renderFilters().then(render);
@@ -393,6 +421,96 @@
     }).join('');
     f.innerHTML = allBtn + catBtns;
   }
+
+  // ---------- 分类管理（增删改，全部本地持久化） ----------
+  let editingCatKey = null;
+  const CAT_PALETTE = ['#6366f1', '#e17055', '#0984e3', '#e84393', '#00b894', '#fdcb6e', '#e66767', '#a29bfe', '#00cec9', '#fd79a8', '#636e72', '#fab1a0'];
+
+  function openCatManage() { renderCatManage(); $('#catManageModal').hidden = false; }
+  function closeCatManage() { $('#catManageModal').hidden = true; }
+  function renderCatManage() {
+    const list = $('#catManageList');
+    list.innerHTML = orderedCats().map(c =>
+      '<div class="cat-row">' +
+        '<span class="cat-dot" style="background:' + c.color + '"></span>' +
+        '<span class="cat-row-name">' + escapeHtml(c.name) + '</span>' +
+        '<span class="cat-row-tags">' + (c.key === 'other' ? '默认' : '自定义') + '</span>' +
+        '<button class="cat-row-btn" type="button" data-edit="' + c.key + '">编辑</button>' +
+        '<button class="cat-row-btn danger" type="button" data-del="' + c.key + '"' + (c.key === 'other' ? ' disabled' : '') + '>删除</button>' +
+      '</div>'
+    ).join('');
+  }
+
+  function openCatEditor(key) {
+    editingCatKey = key || null;
+    const c = key ? CAT_MAP[key] : null;
+    $('#catEditTitle').textContent = key ? '编辑分类' : '添加分类';
+    $('#catEditName').value = c ? c.name : '';
+    const color = c ? c.color : CAT_PALETTE[CATS.length % CAT_PALETTE.length];
+    $('#catEditColor').value = color;
+    renderSwatches(color);
+    $('#catEditKeywords').value = (c && c.keywords) ? c.keywords.join(', ') : '';
+    $('#catEditModal').hidden = false;
+  }
+  function closeCatEditor() { $('#catEditModal').hidden = true; editingCatKey = null; }
+  function renderSwatches(sel) {
+    const wrap = $('#catEditSwatches');
+    wrap.innerHTML = CAT_PALETTE.map(col =>
+      '<button type="button" class="swatch' + (col === sel ? ' sel' : '') + '" data-col="' + col + '" style="background:' + col + '"></button>'
+    ).join('');
+  }
+
+  function saveCatEditor() {
+    const name = $('#catEditName').value.trim();
+    if (!name) { alert('请输入分类名称'); return; }
+    const color = $('#catEditColor').value || '#6366f1';
+    const kws = $('#catEditKeywords').value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+    if (editingCatKey && CAT_MAP[editingCatKey]) {
+      const c = CAT_MAP[editingCatKey];
+      c.name = name; c.color = color; c.keywords = kws;
+    } else {
+      let key;
+      do { key = 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); } while (CAT_MAP[key]);
+      CATS.push({ key, name, color, keywords: kws });
+    }
+    rebuildCatMap(); saveCats();
+    getCatOrder(); // 触发顺序补全（新分类进入末尾）
+    rebuildCategorySelect();
+    renderCatManage(); renderFilters(); render();
+    closeCatEditor();
+  }
+
+  async function deleteCat(key) {
+    const c = CAT_MAP[key]; if (!c) return;
+    if (key === 'other') { alert('「其他」是默认兜底分类，不能删除'); return; }
+    const items = await getAll();
+    const owned = items.filter(i => i.category === key);
+    const destSel = $('#catDeleteDest');
+    if (owned.length) {
+      $('#catDeleteDestWrap').style.display = '';
+      destSel.innerHTML = orderedCats().filter(x => x.key !== key).map(x => '<option value="' + x.key + '">' + escapeHtml(x.name) + '</option>').join('');
+      $('#catDeleteText').textContent = '删除分类「' + c.name + '」？其下 ' + owned.length + ' 条收藏将移动到：';
+    } else {
+      $('#catDeleteDestWrap').style.display = 'none';
+      $('#catDeleteText').textContent = '删除分类「' + c.name + '」？';
+    }
+    $('#catDeleteModal').dataset.key = key;
+    $('#catDeleteModal').hidden = false;
+  }
+  async function confirmDeleteCat() {
+    const key = $('#catDeleteModal').dataset.key;
+    const c = CAT_MAP[key]; if (!c) { closeCatDelete(); return; }
+    const dest = $('#catDeleteDest').value || 'other';
+    const items = await getAll();
+    for (const it of items) if (it.category === key) { it.category = dest; await putItem(it); }
+    CATS = CATS.filter(x => x.key !== key);
+    rebuildCatMap(); saveCats();
+    setCatOrder(getCatOrder().filter(k => k !== key));
+    rebuildCategorySelect();
+    renderCatManage(); renderFilters(); render();
+    closeCatDelete();
+  }
+  function closeCatDelete() { $('#catDeleteModal').hidden = true; }
 
   function escapeHtml(s) {
     return (s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
@@ -565,7 +683,7 @@
   // ---------- 初始化 ----------
   async function init() {
     // 分类下拉
-    $('#category').innerHTML = orderedCats().map(c => '<option value="' + c.key + '">' + c.name + '</option>').join('');
+    rebuildCategorySelect();
     await renderFilters(); render();
 
     // tab
@@ -706,6 +824,25 @@
     $('#sidebarClose').addEventListener('click', closeSidebar);
     $('#sidebarOverlay').addEventListener('click', closeSidebar);
     $('#sortToggle').addEventListener('click', toggleSorting);
+    $('#manageCatsBtn').addEventListener('click', openCatManage);
+    $('#catManageClose').addEventListener('click', closeCatManage);
+    $('#catManageList').addEventListener('click', e => {
+      const ed = e.target.closest('[data-edit]');
+      const del = e.target.closest('[data-del]');
+      if (ed) openCatEditor(ed.dataset.edit);
+      else if (del && !del.disabled) deleteCat(del.dataset.del);
+    });
+    $('#catAddBtn').addEventListener('click', () => openCatEditor(null));
+    $('#catEditCancel').addEventListener('click', closeCatEditor);
+    $('#catEditSave').addEventListener('click', saveCatEditor);
+    $('#catEditSwatches').addEventListener('click', e => {
+      const sw = e.target.closest('[data-col]'); if (!sw) return;
+      $('#catEditColor').value = sw.dataset.col;
+      renderSwatches(sw.dataset.col);
+    });
+    $('#catEditColor').addEventListener('input', e => renderSwatches(e.target.value));
+    $('#catDeleteCancel').addEventListener('click', closeCatDelete);
+    $('#catDeleteOk').addEventListener('click', confirmDeleteCat);
     initSortDrag();
 
     // Service Worker
