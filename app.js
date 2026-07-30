@@ -71,10 +71,75 @@
   const cropModal = $('#cropModal');
   const cropImg = $('#cropImg');
   const cropStage = $('#cropStage');
+  const cropFrame = $('#cropFrame');
   const cropBox = $('#cropBox');
   let cropScale = 1;
   let cropState = null;
   let drag = null;
+
+  // 读取 JPEG 的 EXIF Orientation，修正从相册选的真实照片方向（截屏 PNG 不受影响）
+  function getOrientation(buf) {
+    try {
+      const view = new DataView(buf);
+      if (view.getUint16(0) !== 0xFFD8) return 1; // 非 JPEG（如 PNG 截屏）无需处理
+      const len = view.byteLength;
+      let off = 2;
+      while (off < len) {
+        const marker = view.getUint16(off); off += 2;
+        if (marker === 0xFFE1) {
+          const exif = off + 2;
+          if (view.getUint32(exif) === 0x45786966) { // "Exif"
+            const tiff = exif + 6;
+            const little = view.getUint16(tiff) === 0x4949;
+            const dir = tiff + view.getUint32(tiff + 4, little);
+            const entries = view.getUint16(dir, little);
+            for (let i = 0; i < entries; i++) {
+              const eo = dir + 2 + i * 12;
+              if (view.getUint16(eo, little) === 0x0112) return view.getUint16(eo + 8, little);
+            }
+          }
+          return 1;
+        }
+        if ((marker & 0xFF00) !== 0xFF00) break;
+        off += view.getUint16(off);
+      }
+    } catch (_) {}
+    return 1;
+  }
+  function loadImg(src) {
+    return new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im);
+      im.onerror = rej;
+      im.src = src;
+    });
+  }
+  async function fixOrientation(dataUrl) {
+    try {
+      const buf = await (await fetch(dataUrl)).arrayBuffer();
+      const orient = getOrientation(buf);
+      if (orient === 1 || !orient) return dataUrl;
+      const img = await loadImg(dataUrl);
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (orient === 6 || orient === 8) { canvas.width = h; canvas.height = w; }
+      else { canvas.width = w; canvas.height = h; }
+      ctx.save();
+      switch (orient) {
+        case 2: ctx.translate(w, 0); ctx.scale(-1, 1); break;
+        case 3: ctx.translate(w, h); ctx.rotate(Math.PI); break;
+        case 4: ctx.translate(0, h); ctx.scale(1, -1); break;
+        case 5: ctx.translate(h, 0); ctx.rotate(Math.PI / 2); ctx.scale(-1, 1); break;
+        case 6: ctx.translate(h, 0); ctx.rotate(Math.PI / 2); break;
+        case 7: ctx.translate(0, w); ctx.rotate(-Math.PI / 2); ctx.scale(-1, 1); break;
+        case 8: ctx.translate(0, w); ctx.rotate(-Math.PI / 2); break;
+      }
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+      return canvas.toDataURL('image/jpeg', 0.92);
+    } catch (_) { return dataUrl; }
+  }
 
   function openCropper(dataUrl) {
     cropModal.hidden = false;
@@ -85,10 +150,9 @@
       const scale = Math.min(maxW / natW, maxH / natH, 1);
       cropScale = scale;
       const dw = Math.round(natW * scale), dh = Math.round(natH * scale);
-      cropImg.style.width = dw + 'px';
-      cropImg.style.height = dh + 'px';
-      cropStage.style.width = dw + 'px';
-      cropStage.style.height = dh + 'px';
+      // 关键：用内层 cropFrame 作为 img 与 cropBox 的统一定位基准，避免被 flex 居中造成原点错位（黑色/上移）
+      cropFrame.style.width = dw + 'px';
+      cropFrame.style.height = dh + 'px';
       const w = Math.round(dw * 0.92), h = Math.round(dh * 0.92);
       cropState = { left: Math.round((dw - w) / 2), top: Math.round((dh - h) / 2), w, h };
       applyCropBox();
@@ -113,7 +177,7 @@
   function onPointerMove(e) {
     if (!drag) return;
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-    const b = drag.box, SW = cropStage.clientWidth, SH = cropStage.clientHeight, MIN = 30;
+    const b = drag.box, SW = cropFrame.clientWidth, SH = cropFrame.clientHeight, MIN = 30;
     if (drag.mode === 'move') {
       cropState = { left: clamp(b.left + dx, 0, SW - b.w), top: clamp(b.top + dy, 0, SH - b.h), w: b.w, h: b.h };
     } else {
@@ -130,8 +194,15 @@
   function onPointerUp() { drag = null; }
 
   function confirmCrop() {
-    const sx = cropState.left / cropScale, sy = cropState.top / cropScale;
-    const sw = cropState.w / cropScale, sh = cropState.h / cropScale;
+    const natW = cropImg.naturalWidth, natH = cropImg.naturalHeight;
+    let sx = cropState.left / cropScale, sy = cropState.top / cropScale;
+    let sw = cropState.w / cropScale, sh = cropState.h / cropScale;
+    // 防止源矩形超出原图 → 图外区域透明 → 转 JPEG 变黑
+    if (sx < 0) { sw += sx; sx = 0; }
+    if (sy < 0) { sh += sy; sy = 0; }
+    if (sx + sw > natW) sw = natW - sx;
+    if (sy + sh > natH) sh = natH - sy;
+    if (!(sw > 0 && sh > 0)) { sx = 0; sy = 0; sw = natW; sh = natH; }
     const maxDim = 1600;
     let outW = Math.round(sw), outH = Math.round(sh);
     const sc = Math.min(1, maxDim / Math.max(outW, outH));
@@ -345,17 +416,20 @@
     $('#lightbox').addEventListener('click', e => { if (e.target === $('#lightbox')) closeLightbox(); });
 
     // 选图 → 进入裁剪
-    $('#file').addEventListener('change', e => {
+    $('#file').addEventListener('change', async e => {
       const f = e.target.files[0]; if (!f) return;
       const reader = new FileReader();
-      reader.onload = () => openCropper(reader.result);
+      reader.onload = async () => {
+        const fixed = await fixOrientation(reader.result); // 先摆正方向，再进入裁剪
+        openCropper(fixed);
+      };
       reader.readAsDataURL(f);
       e.target.value = '';
     });
 
     $('#cropCancel').addEventListener('click', closeCropper);
     $('#cropReset').addEventListener('click', () => {
-      const dw = cropStage.clientWidth, dh = cropStage.clientHeight;
+      const dw = cropFrame.clientWidth, dh = cropFrame.clientHeight;
       cropState = { left: 0, top: 0, w: dw, h: dh };
       applyCropBox();
     });
