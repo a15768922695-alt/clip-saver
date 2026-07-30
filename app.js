@@ -13,6 +13,17 @@
     { key: 'other',   name: '其他',      color: '#636e72', keywords: [] }
   ];
   const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
+  const CAT_ORDER_KEY = 'clipSaverCatOrder';
+
+  function getCatOrder() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CAT_ORDER_KEY) || 'null');
+      if (Array.isArray(saved) && saved.length === CATEGORIES.length && saved.every(k => CAT_MAP[k])) return saved;
+    } catch (_) {}
+    return CATEGORIES.map(c => c.key);
+  }
+  function setCatOrder(keys) { localStorage.setItem(CAT_ORDER_KEY, JSON.stringify(keys)); }
+  function orderedCats() { return getCatOrder().map(k => CAT_MAP[k]); }
 
   function classify(text) {
     const t = (text || '').toLowerCase();
@@ -221,8 +232,100 @@
   // ---------- 分类标签（带序号小色圈，去长方形） ----------
   function chip(cat) {
     const c = CAT_MAP[cat] || CAT_MAP.other;
-    const idx = CATEGORIES.findIndex(x => x.key === (cat || 'other')) + 1;
+    const idx = orderedCats().findIndex(x => x.key === (cat || 'other')) + 1;
     return '<span class="cat"><span class="cat-num" style="background:' + c.color + '">' + idx + '</span>' + c.name + '</span>';
+  }
+
+  // ---------- 侧边栏 ----------
+  function openSidebar() {
+    $('#sidebar').classList.add('open');
+    $('#sidebarOverlay').hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSidebar() {
+    $('#sidebar').classList.remove('open');
+    $('#sidebarOverlay').hidden = true;
+    document.body.style.overflow = '';
+    stopSorting();
+  }
+  let sorting = false;
+  function toggleSorting() {
+    sorting = !sorting;
+    $('#sidebar').classList.toggle('sorting', sorting);
+    $('#sortToggle').textContent = sorting ? '✓ 完成排序' : '⋮⋮ 调整顺序';
+    $('#sortToggle').classList.toggle('primary', sorting);
+  }
+  function stopSorting() {
+    sorting = false;
+    $('#sidebar').classList.remove('sorting');
+    $('#sortToggle').textContent = '⋮⋮ 调整顺序';
+    $('#sortToggle').classList.remove('primary');
+  }
+
+  // ---------- 分类拖拽排序 ----------
+  let dragEl = null, dragGhost = null, dragStartY = 0, dragOffsetY = 0, dragItems = [];
+  function initSortDrag() {
+    const list = $('#filters');
+    list.addEventListener('pointerdown', e => {
+      if (!sorting) return;
+      const handle = e.target.closest('.filter-handle');
+      if (!handle) return;
+      const item = handle.closest('.filter-item');
+      if (!item || item.dataset.f === 'all') return;
+      e.preventDefault();
+      dragEl = item;
+      const rect = item.getBoundingClientRect();
+      const listRect = list.getBoundingClientRect();
+      dragOffsetY = e.clientY - rect.top;
+      dragStartY = e.clientY;
+      dragGhost = item.cloneNode(true);
+      dragGhost.classList.add('dragging');
+      dragGhost.style.position = 'fixed';
+      dragGhost.style.left = rect.left + 'px';
+      dragGhost.style.top = rect.top + 'px';
+      dragGhost.style.width = rect.width + 'px';
+      dragGhost.style.pointerEvents = 'none';
+      dragGhost.style.opacity = '0.95';
+      document.body.appendChild(dragGhost);
+      item.style.opacity = '0.35';
+      dragItems = Array.from(list.querySelectorAll('.filter-item')).filter(x => x !== dragEl);
+      try { list.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    list.addEventListener('pointermove', e => {
+      if (!dragEl || !dragGhost) return;
+      e.preventDefault();
+      const y = e.clientY - dragOffsetY;
+      dragGhost.style.top = y + 'px';
+      const listRect = list.getBoundingClientRect();
+      const relY = e.clientY - listRect.top + list.scrollTop;
+      let best = null, bestScore = Infinity;
+      for (const it of dragItems) {
+        const r = it.getBoundingClientRect();
+        const cy = r.top + r.height / 2 - listRect.top + list.scrollTop;
+        const score = Math.abs(cy - relY);
+        if (score < bestScore) { bestScore = score; best = it; }
+      }
+      if (best) {
+        const r = best.getBoundingClientRect();
+        const cy = r.top + r.height / 2;
+        if (e.clientY < cy) list.insertBefore(dragEl, best);
+        else list.insertBefore(dragEl, best.nextSibling);
+      }
+    });
+    const endDrag = () => {
+      if (!dragEl) return;
+      if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+      dragEl.style.opacity = '';
+      const newOrder = Array.from($('#filters').querySelectorAll('.filter-item'))
+        .map(x => x.dataset.f).filter(k => k && k !== 'all');
+      if (newOrder.length === CATEGORIES.length) setCatOrder(newOrder);
+      dragEl = null; dragItems = [];
+      // 重新渲染以应用新序号/位置
+      renderFilters().then(render);
+      toggleSorting(); // 完成后自动退出排序模式
+    };
+    list.addEventListener('pointerup', endDrag);
+    list.addEventListener('pointercancel', endDrag);
   }
 
   // ---------- 自定义确认弹窗（绕开 iOS 原生 confirm 不弹窗的问题） ----------
@@ -258,8 +361,7 @@
       const thumbSrc = it.image || (it.text ? generateTextThumb(it.text, c.color) : (it.thumb || ''));
       const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">📝</div>';
       const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 80) || (it.tags || []).join(' ') || (it.link ? '🔗 ' + it.link : '') || '';
-      return '<div class="card" data-id="' + it.id + '">' +
-        '<div class="seq">' + (i + 1) + '</div>' + thumb +
+      return '<div class="card" data-id="' + it.id + '">' + thumb +
         '<div class="body">' + chip(it.category) +
         '<div class="ttl">' + escapeHtml(titleOf(it)) + '</div>' +
         '<div class="sub">' + escapeHtml(sub) + '</div></div>' +
@@ -268,15 +370,28 @@
     }).join('');
   }
 
-  function renderFilters() {
+  async function renderFilters() {
     const f = $('#filters');
-    const all = [{ key: 'all', name: '全部', color: 'var(--primary)' }].concat(
-      CATEGORIES.map((c, i) => Object.assign({}, c, { _n: i + 1 }))
-    );
-    f.innerHTML = all.map(c =>
-      '<button class="chip' + (state.filter === c.key ? ' active' : '') + '" data-f="' + c.key + '">' +
-      (c._n ? '<span class="chip-num">' + c._n + '</span>' : '') + c.name + '</button>'
-    ).join('');
+    const items = await getAll();
+    const counts = {};
+    items.forEach(it => { counts[it.category] = (counts[it.category] || 0) + 1; });
+    const cats = orderedCats();
+    const allBtn = '<button class="filter-item' + (state.filter === 'all' ? ' active' : '') + '" data-f="all">' +
+      '<span class="filter-bar" style="background:var(--primary)"></span>' +
+      '<span class="filter-num" style="background:var(--primary)">✦</span>' +
+      '<span class="filter-name">全部</span>' +
+      '<span class="filter-count">' + items.length + '</span>' +
+      '<span class="filter-handle">⋮⋮</span></button>';
+    const catBtns = cats.map((c, i) => {
+      const active = state.filter === c.key ? ' active' : '';
+      return '<button class="filter-item' + active + '" data-f="' + c.key + '">' +
+        '<span class="filter-bar" style="background:' + c.color + '"></span>' +
+        '<span class="filter-num" style="background:' + c.color + '">' + (i + 1) + '</span>' +
+        '<span class="filter-name">' + escapeHtml(c.name) + '</span>' +
+        '<span class="filter-count">' + (counts[c.key] || 0) + '</span>' +
+        '<span class="filter-handle">⋮⋮</span></button>';
+    }).join('');
+    f.innerHTML = allBtn + catBtns;
   }
 
   function escapeHtml(s) {
@@ -444,22 +559,25 @@
     else await addItem(item);
     resetForm();
     state.filter = 'all'; state.q = ''; $('#search').value = '';
-    renderFilters(); render(); showView('library');
+    await renderFilters(); render(); showView('library');
   }
 
   // ---------- 初始化 ----------
-  function init() {
+  async function init() {
     // 分类下拉
-    $('#category').innerHTML = CATEGORIES.map(c => '<option value="' + c.key + '">' + c.name + '</option>').join('');
-    renderFilters(); render();
+    $('#category').innerHTML = orderedCats().map(c => '<option value="' + c.key + '">' + c.name + '</option>').join('');
+    await renderFilters(); render();
 
     // tab
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => showView(t.dataset.view)));
 
     // 筛选
     $('#filters').addEventListener('click', e => {
-      const b = e.target.closest('.chip'); if (!b) return;
-      state.filter = b.dataset.f; renderFilters(); render();
+      const b = e.target.closest('.filter-item'); if (!b) return;
+      if ($('#sidebar').classList.contains('sorting')) return; // 排序模式下点选无效
+      state.filter = b.dataset.f;
+      renderFilters(); render();
+      if (window.innerWidth < 720) closeSidebar();
     });
 
     // 搜索
@@ -582,6 +700,13 @@
       } catch (err) { alert('导入失败：文件格式不正确'); }
       e.target.value = '';
     });
+
+    // 侧边栏事件
+    $('#sidebarOpen').addEventListener('click', openSidebar);
+    $('#sidebarClose').addEventListener('click', closeSidebar);
+    $('#sidebarOverlay').addEventListener('click', closeSidebar);
+    $('#sortToggle').addEventListener('click', toggleSorting);
+    initSortDrag();
 
     // Service Worker
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

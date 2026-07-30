@@ -15,14 +15,30 @@
 </head>
 <body>
 <div id="app">
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-head">
+      <button id="sidebarClose" class="icon-btn" type="button" aria-label="收起">☰</button>
+      <div class="brand">📌 随手收藏</div>
+    </div>
+    <div class="sidebar-search">
+      <span class="search-icon">🔍</span>
+      <input id="search" class="search" type="search" placeholder="搜索文字 / 标签…" autocomplete="off">
+    </div>
+    <div id="filters" class="filter-list"></div>
+    <div class="sidebar-foot">
+      <button id="sortToggle" class="btn ghost" type="button">⋮⋮ 调整顺序</button>
+    </div>
+  </aside>
+  <div id="sidebarOverlay" class="sidebar-overlay" hidden></div>
+
   <header class="topbar">
+    <button id="sidebarOpen" class="icon-btn" type="button" aria-label="菜单">☰</button>
     <div class="brand">📌 随手收藏</div>
-    <input id="search" class="search" type="search" placeholder="搜索文字 / 标签…" autocomplete="off">
+    <div class="topbar-spacer"></div>
   </header>
 
   <!-- 收藏列表 -->
   <section id="view-library" class="view active">
-    <div id="filters" class="filters"></div>
     <div id="list" class="list"></div>
     <div id="empty" class="empty" hidden>还没有收藏，点下面的 ➕ 添加截图吧</div>
   </section>
@@ -145,7 +161,7 @@
     <div id="titlePickerBody" class="sheet-body"></div>
   </div>
 
-  <div class="ver">v11</div>
+  <div class="ver">v12</div>
 </div>
 <script src="app.js"></script>
 </body>
