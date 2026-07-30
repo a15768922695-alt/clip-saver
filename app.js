@@ -255,7 +255,7 @@
     }
     list.innerHTML = view.map((it, i) => {
       const c = CAT_MAP[it.category] || CAT_MAP.other;
-      const thumbSrc = it.image || it.thumb || (it.text ? generateTextThumb(it.text, c.color) : '');
+      const thumbSrc = it.image || (it.text ? generateTextThumb(it.text, c.color) : (it.thumb || ''));
       const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">📝</div>';
       const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 80) || (it.tags || []).join(' ') || (it.link ? '🔗 ' + it.link : '') || '';
       return '<div class="card" data-id="' + it.id + '">' +
@@ -338,8 +338,12 @@
     const c = document.createElement('canvas');
     c.width = size; c.height = size;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = hexToRgba(color || '#6c5ce7', 0.08);
+    // 纯白底（JPEG 导出前先铺白，避免透明区变黑）
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, size, size);
+    // 顶部一道分类色细条，区分条目又保持白底清爽
+    ctx.fillStyle = hexToRgba(color || '#6c5ce7', 0.9);
+    ctx.fillRect(0, 0, size, 4);
     ctx.fillStyle = '#2d3436';
     ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
     ctx.textBaseline = 'top';
@@ -436,7 +440,6 @@
       created: editingId ? (await getById(editingId)).created : Date.now(),
       updated: Date.now()
     };
-    if (!draftImage && text) item.thumb = generateTextThumb(text, (CAT_MAP[category] || CAT_MAP.other).color);
     if (editingId) { item.id = editingId; await putItem(item); }
     else await addItem(item);
     resetForm();
