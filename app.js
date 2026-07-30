@@ -263,7 +263,7 @@
       return '<div class="card" data-id="' + it.id + '">' +
         '<div class="seq">' + (i + 1) + '</div>' + thumb +
         '<div class="body">' + chip(it.category) +
-        '<div class="ttl">' + escapeHtml(it.title || '未命名') + '</div>' +
+        '<div class="ttl">' + escapeHtml(titleOf(it)) + '</div>' +
         '<div class="sub">' + escapeHtml(sub) + '</div></div>' +
         '<button class="del" type="button" data-id="' + it.id + '" aria-label="删除">×</button>' +
       '</div>';
@@ -283,6 +283,16 @@
 
   function escapeHtml(s) {
     return (s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+  // 显示标题时自动回退：自定义标题 > 文字第一行 > 链接 > 柔和兜底
+  function titleOf(it) {
+    const t = (it.title || '').trim();
+    if (t && t !== '未命名') return t.length > 42 ? t.slice(0, 42) + '…' : t;
+    const line = (it.text || '').split('\n')[0].trim();
+    if (line) return line.length > 42 ? line.slice(0, 42) + '…' : line;
+    const link = (it.link || '').trim();
+    if (link) return link.length > 42 ? link.slice(0, 42) + '…' : link;
+    return '一条收藏';
   }
 
   // 仅允许 http/https 链接，避免 javascript: 等危险协议
@@ -315,7 +325,7 @@
       (it.image ? '<figure class="shot" id="detailShot"><img src="' + it.image + '"><figcaption>👆 点击图片看大图</figcaption></figure>' : '') +
       '<div class="meta">' +
       chip(it.category) +
-      '<h3>' + escapeHtml(it.title || '未命名') + '</h3>' +
+      '<h3>' + escapeHtml(titleOf(it)) + '</h3>' +
       (it.tags && it.tags.length ? '<div class="tags">' + it.tags.map(t => '<span class="tag">#' + escapeHtml(t) + '</span>').join('') + '</div>' : '') +
       (it.text ? '<div class="text">' + escapeHtml(it.text) + '</div>' : '') +
       (it.link ? (function () { const u = safeUrl(it.link); return u ? '<a class="link" href="' + u + '" target="_blank" rel="noopener">🔗 ' + escapeHtml(it.link) + '</a>' : '<div class="link-text">🔗 ' + escapeHtml(it.link) + '</div>'; })() : '') +
@@ -336,7 +346,7 @@
   }
   function loadToForm(it) {
     editingId = it.id; draftImage = it.image || null;
-    $('#title').value = it.title || '';
+    $('#title').value = titleOf(it);
     $('#link').value = it.link || '';
     $('#category').value = it.category || 'other';
     $('#tags').value = (it.tags || []).join(', ');
