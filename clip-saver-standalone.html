@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="收藏夹">
 <meta name="theme-color" content="#6c5ce7">
-<title>随手收藏（单文件版）</title>
+<title>随手收藏</title>
 <style>
 :root{
   --bg:#f5f6fa;
@@ -84,6 +84,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
   font-family:inherit;}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);}
 .field textarea{resize:vertical;}
+.title-row{display:flex;gap:8px;align-items:center;}
+.title-row input{flex:1;}
+.title-row .btn{flex:0 0 auto;white-space:nowrap;}
 .auto-hint{font-size:12px;color:var(--primary);font-weight:600;}
 .ocr-status{font-size:13px;color:#636e72;background:#fff;border-radius:10px;
   padding:8px 10px;border:1px solid var(--line);}
@@ -179,6 +182,17 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .modal-actions .btn{flex:1;}
 
 .ver{text-align:center;color:var(--muted);font-size:11px;padding:8px 0 16px;}
+
+/* 底部标题选择面板 */
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:110;background:#fff;border-radius:18px 18px 0 0;
+  box-shadow:0 -4px 30px rgba(0,0,0,.15);max-width:560px;margin:0 auto;padding:0 0 env(safe-area-inset-bottom);}
+.sheet[hidden]{display:none;}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 8px;font-size:15px;font-weight:600;}
+.sheet-body{max-height:50vh;overflow:auto;-webkit-overflow-scrolling:touch;padding:0 16px 16px;}
+.sheet-item{display:block;width:100%;text-align:left;border:none;background:#f7f7f9;border-radius:12px;
+  padding:12px 14px;margin-bottom:8px;font-size:15px;line-height:1.5;color:var(--ink);font-family:inherit;}
+.sheet-item:active{background:#efeafc;}
+
 </style>
 </head>
 <body>
@@ -219,7 +233,10 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
       </label>
       <label class="field">
         <span>标题（自动生成，可改）</span>
-        <input id="title" type="text" placeholder="如：想看的书 / 一条文案">
+        <div class="title-row">
+          <input id="title" type="text" placeholder="如：想看的书 / 一条文案">
+          <button id="pickTitleBtn" class="btn tiny" type="button">从文字选</button>
+        </div>
       </label>
       <label class="field">
         <span>分类</span>
@@ -246,9 +263,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
   <section id="view-about" class="view">
     <div class="about">
       <h3>关于「随手收藏」</h3>
-      <p>一个放在手机上的私人截图收纳盒。上传截图 → 裁剪 → 自动分类 → 保存。</p>
-      <p><b>单文件版说明：</b>本文件不依赖任何服务器，数据保存在手机浏览器本地存储。<b>务必用「文件」方式打开（微信/邮件/AirDrop 传到手机后用 Safari 打开），不要直接当网页链接访问。</b></p>
-      <p>建议常按「导出备份」，把数据存成 JSON，防止换手机或清理浏览器时丢失。</p>
+      <p>一个放在手机首页的私人截图收纳盒。上传截图 → 裁剪 → 自动分类 → 保存。</p>
+      <p><b>添加到主屏幕：</b>在 iPhone 的 Safari 打开本页面 → 点底部「分享」按钮 →「添加到主屏幕」。</p>
+      <p>数据保存在本机浏览器（IndexedDB），<b>不上传任何服务器</b>。可随时导出备份。</p>
       <hr>
       <p class="muted">分类：电影/剧集 · 书籍 · 穿搭好物 · 美食 · 文字摘抄 · 其他</p>
       <button id="exportBtn" class="btn">⬇️ 导出备份 (JSON)</button>
@@ -301,7 +318,16 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     <img id="lightboxImg" alt="查看大图">
   </div>
 
-  <div class="ver">v9 · 单文件版</div>
+  <!-- 从文字中选标题 -->
+  <div id="titlePicker" class="sheet" hidden>
+    <div class="sheet-head">
+      <span>选一句作为标题</span>
+      <button id="titlePickerClose" class="btn tiny" type="button">取消</button>
+    </div>
+    <div id="titlePickerBody" class="sheet-body"></div>
+  </div>
+
+  <div class="ver">v10-standalone</div>
 </div>
 <script>
 (function () {
@@ -332,37 +358,35 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     return best.score > 0 ? best.key : 'other';
   }
 
-  // ---------- 本地存储（单文件版：localStorage，兼容 file:// 离线打开） ----------
+  // ---------- localStorage 存储（单文件版 file:// 兼容） ----------
   const LS_KEY = 'clipSaverStandalone';
-  function readStore() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (_) { return []; }
+  function lsRead() {
+    try { const raw = localStorage.getItem(LS_KEY); return raw ? JSON.parse(raw) : []; }
+    catch (e) { return []; }
   }
-  function writeStore(arr) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch (_) {}
-  }
-  function nextId(arr) {
-    let m = 0; arr.forEach(x => { if (typeof x.id === 'number' && x.id > m) m = x.id; });
-    return m + 1;
-  }
-  async function getAll() {
-    return readStore().slice().sort((a, b) => (b.created || 0) - (a.created || 0));
+  function lsWrite(arr) { try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch (e) {} }
+  function getAll() {
+    return Promise.resolve(lsRead().sort((a, b) => (b.created || 0) - (a.created || 0)));
   }
   async function addItem(it) {
-    const arr = readStore();
-    it.id = nextId(arr);
-    arr.push(it); writeStore(arr); return it.id;
+    const arr = lsRead();
+    it.id = Date.now() + Math.floor(Math.random() * 1000);
+    arr.push(it);
+    lsWrite(arr);
+    return it.id;
   }
   async function putItem(it) {
-    const arr = readStore();
-    const i = arr.findIndex(x => x.id === it.id);
-    if (i >= 0) arr[i] = it; else arr.push(it);
-    writeStore(arr); return it.id;
+    const arr = lsRead();
+    const idx = arr.findIndex(x => x.id === it.id);
+    if (idx >= 0) arr[idx] = it; else arr.push(it);
+    lsWrite(arr);
   }
   async function delItem(id) {
-    writeStore(readStore().filter(x => x.id !== id));
+    const arr = lsRead().filter(x => x.id !== id);
+    lsWrite(arr);
   }
   async function getById(id) {
-    return readStore().find(x => x.id === id) || null;
+    return lsRead().find(x => x.id === id) || null;
   }
 
   // ---------- 状态 ----------
@@ -568,7 +592,9 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
       return;
     }
     list.innerHTML = view.map((it, i) => {
-      const thumb = it.image ? '<img class="thumb" src="' + it.image + '">' : '';
+      const c = CAT_MAP[it.category] || CAT_MAP.other;
+      const thumbSrc = it.image || it.thumb || (it.text ? generateTextThumb(it.text, c.color) : '');
+      const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">📝</div>';
       const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 80) || (it.tags || []).join(' ') || (it.link ? '🔗 ' + it.link : '') || '';
       return '<div class="card" data-id="' + it.id + '">' +
         '<div class="seq">' + (i + 1) + '</div>' + thumb +
@@ -605,6 +631,74 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     return '一条收藏';
   }
 
+  // 从文字内容中提取标题候选
+  function extractTitleCandidates(text) {
+    const lines = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    const out = [];
+    for (const line of lines) {
+      if (out.length >= 6) break;
+      if (line.length <= 60) { out.push(line); continue; }
+      const parts = line.split(/([。！？.!?]+)/);
+      let buf = '';
+      for (let i = 0; i < parts.length; i++) {
+        buf += parts[i];
+        if (/[。！？.!?]$/.test(parts[i]) || i === parts.length - 1) {
+          const s = buf.trim();
+          if (s) out.push(s);
+          buf = '';
+          if (out.length >= 6) break;
+        }
+      }
+    }
+    return out.slice(0, 6);
+  }
+  function openTitlePicker() {
+    const text = $('#text').value.trim();
+    if (!text) { alert('先输入文字内容'); return; }
+    const candidates = extractTitleCandidates(text);
+    if (!candidates.length) { alert('没有可提取的句子'); return; }
+    const body = $('#titlePickerBody');
+    body.innerHTML = candidates.map(c =>
+      '<button class="sheet-item" type="button">' + escapeHtml(c.length > 60 ? c.slice(0, 60) + '…' : c) + '</button>'
+    ).join('');
+    $('#titlePicker').hidden = false;
+  }
+  function closeTitlePicker() { $('#titlePicker').hidden = true; }
+
+  // 文字缩略图：无图时给列表一个统一的小图
+  function hexToRgba(hex, alpha) {
+    const m = hex.replace('#', '').match(/(.{2})(.{2})(.{2})/);
+    if (!m) return 'rgba(241,240,254,' + alpha + ')';
+    return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + alpha + ')';
+  }
+  function generateTextThumb(text, color) {
+    const size = 112;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = hexToRgba(color || '#6c5ce7', 0.08);
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#2d3436';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+    ctx.textBaseline = 'top';
+    const sample = (text || '').replace(/\n/g, ' ').trim().slice(0, 40) + ((text || '').length > 40 ? '…' : '');
+    const lineH = 17;
+    const lines = [];
+    let line = '';
+    for (const ch of sample) {
+      const test = line + ch;
+      if (ctx.measureText(test).width > size - 16 && line) {
+        lines.push(line);
+        line = ch;
+        if (lines.length >= 4) break;
+      } else { line = test; }
+    }
+    if (line && lines.length < 4) lines.push(line);
+    let y = 14;
+    for (const l of lines) { ctx.fillText(l, 8, y); y += lineH; }
+    return c.toDataURL('image/jpeg', 0.92);
+  }
+
   // 仅允许 http/https 链接，避免 javascript: 等危险协议
   function safeUrl(u) {
     try { const p = new URL(u); if (p.protocol === 'http:' || p.protocol === 'https:') return p.href; } catch (e) {}
@@ -630,7 +724,6 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     const it = await getById(id);
     if (!it) return;
     state.currentId = id;
-    const c = CAT_MAP[it.category] || CAT_MAP.other;
     $('#detail').innerHTML =
       (it.image ? '<figure class="shot" id="detailShot"><img src="' + it.image + '"><figcaption>👆 点击图片看大图</figcaption></figure>' : '') +
       '<div class="meta">' +
@@ -662,7 +755,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     $('#tags').value = (it.tags || []).join(', ');
     $('#text').value = it.text || '';
     if (it.image) { $('#preview').src = it.image; $('#preview').hidden = false; document.querySelector('.drop-hint').style.display = 'none'; }
-    updateSaveState();
+    updateSaveState(); updateAutoHint();
     showView('add');
   }
 
@@ -670,16 +763,18 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     const text = $('#text').value.trim();
     const link = $('#link').value.trim();
     const title = $('#title').value.trim() || (text.split('\n')[0].slice(0, 40)) || (link ? link : '未命名');
+    const category = $('#category').value;
     const item = {
       title,
       link,
-      category: $('#category').value,
+      category,
       tags: $('#tags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean),
       text,
       image: draftImage,
       created: editingId ? (await getById(editingId)).created : Date.now(),
       updated: Date.now()
     };
+    if (!draftImage && text) item.thumb = generateTextThumb(text, (CAT_MAP[category] || CAT_MAP.other).color);
     if (editingId) { item.id = editingId; await putItem(item); }
     else await addItem(item);
     resetForm();
@@ -767,9 +862,22 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
       try { await navigator.clipboard.writeText(t); $('#copyBtn').textContent = '✓ 已复制'; setTimeout(() => $('#copyBtn').textContent = '📋 复制文字', 1500); }
       catch { alert('请手动长按文字选择复制'); }
     });
+    $('#pickTitleBtn').addEventListener('click', openTitlePicker);
+    $('#titlePickerClose').addEventListener('click', closeTitlePicker);
+    $('#titlePickerBody').addEventListener('click', e => {
+      const btn = e.target.closest('.sheet-item'); if (!btn) return;
+      $('#title').value = btn.textContent;
+      updateSaveState(); updateAutoHint();
+      closeTitlePicker();
+    });
+    function updateAutoHint() {
+      const text = $('#text').value.trim();
+      const title = $('#title').value.trim();
+      $('#autoHint').textContent = (text && !title) ? '可点「从文字选」挑标题' : '';
+    }
     $('#saveBtn').addEventListener('click', save);
     // 链接/标题/文字任一有内容即可保存（支持只存链接不传图）
-    ['#title', '#link', '#text'].forEach(sel => $(sel).addEventListener('input', updateSaveState));
+    ['#title', '#link', '#text'].forEach(sel => $(sel).addEventListener('input', () => { updateSaveState(); updateAutoHint(); }));
 
     // 详情操作
     $('#editBtn').addEventListener('click', () => { if (state.currentId != null) getById(state.currentId).then(loadToForm); });
@@ -809,11 +917,21 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
       } catch (err) { alert('导入失败：文件格式不正确'); }
       e.target.value = '';
     });
+
+    // Service Worker
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      let swReloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!swReloaded) { swReloaded = true; location.reload(); }
+      });
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
+
 </script>
 </body>
 </html>
