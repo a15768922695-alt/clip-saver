@@ -98,8 +98,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .detail .tags{margin:8px 0;}
 .detail .tag{display:inline-block;font-size:12px;background:#f1f0fe;color:var(--primary);
   border-radius:6px;padding:3px 8px;margin:0 6px 6px 0;}
-.detail .text{white-space:pre-wrap;word-break:break-word;font-size:15px;
-  background:#fafaff;border-radius:12px;padding:12px;margin-top:6px;user-select:text;-webkit-user-select:text;}
+.detail .text{white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.8;
+  color:#2d3436;margin-top:12px;user-select:text;-webkit-user-select:text;}
 .detail .time{font-size:12px;color:var(--muted);margin-top:10px;}
 .detail-actions{margin-top:14px;}
 

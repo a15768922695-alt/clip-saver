@@ -38,6 +38,14 @@
         </div>
       </label>
       <label class="field">
+        <span>文字内容（想记的话直接粘这里）</span>
+        <textarea id="text" rows="5" placeholder="比如一句想存的话、一段文案、读书笔记…"></textarea>
+        <div class="row between">
+          <button id="copyBtn" class="btn tiny" type="button">📋 复制文字</button>
+          <span id="autoHint" class="auto-hint"></span>
+        </div>
+      </label>
+      <label class="field">
         <span>链接（可选，如商品 / 文章网址）</span>
         <input id="link" type="url" inputmode="url" placeholder="https://…（没有截图、只存链接也行）">
       </label>
@@ -52,14 +60,6 @@
       <label class="field">
         <span>标签（逗号分隔）</span>
         <input id="tags" type="text" placeholder="如：待读, 送礼物">
-      </label>
-      <label class="field">
-        <span>备注 / 文字（可选，手动输入）</span>
-        <textarea id="text" rows="5" placeholder="可手动记下这张截图的内容、链接、想法…"></textarea>
-        <div class="row between">
-          <button id="copyBtn" class="btn tiny" type="button">📋 复制文字</button>
-          <span id="autoHint" class="auto-hint"></span>
-        </div>
       </label>
       <button id="saveBtn" class="btn primary" disabled>💾 保存到收藏</button>
     </div>

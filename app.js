@@ -254,7 +254,11 @@
       return;
     }
     list.innerHTML = view.map((it, i) => {
-      const thumb = it.image ? '<img class="thumb" src="' + it.image + '">' : '<div class="thumb empty">🔗</div>';
+      const thumb = it.image
+        ? '<img class="thumb" src="' + it.image + '">'
+        : (it.text && it.text.trim())
+          ? '<div class="thumb empty">📝</div>'
+          : (it.link ? '<div class="thumb empty">🔗</div>' : '<div class="thumb empty">🖼</div>');
       const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 50) || (it.tags || []).join(' ') || (it.link ? '🔗 ' + it.link : '') || '（仅图片）';
       return '<div class="card" data-id="' + it.id + '">' +
         '<div class="seq">' + (i + 1) + '</div>' + thumb +
