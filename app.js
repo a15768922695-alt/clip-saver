@@ -417,9 +417,12 @@
     list.innerHTML = view.map((it, i) => {
       const c = CAT_MAP[it.category] || CAT_MAP.other;
       const imgs = getImages(it);
-      const thumbSrc = imgs[0] || (it.text ? generateTextThumb(it.text, c.color) : (it.thumb || ''));
-      const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">📝</div>';
-      const sub = (it.text || '').replace(/\n/g, ' ').slice(0, 80) || (it.tags || []).join(' ') || (it.link ? '🔗 ' + it.link : '') || '';
+      const hasText = !!(it.text || '').trim();
+      const hasLink = !!(it.link || '').trim();
+      const isLinkOnly = !imgs.length && !hasText && hasLink;
+      const thumbSrc = imgs[0] || (hasText ? generateTextThumb(it.text, c.color) : (it.thumb || ''));
+      const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">' + (isLinkOnly ? '🔗' : '📝') + '</div>';
+      const sub = isLinkOnly ? '' : ((it.text || '').replace(/\n/g, ' ').slice(0, 80) || (it.tags || []).join(' ') || (hasLink ? '🔗 ' + it.link : '') || '');
       return '<div class="card" data-id="' + it.id + '">' + thumb +
         '<div class="body">' + chip(it.category) +
         '<div class="ttl">' + escapeHtml(titleOf(it)) + '</div>' +
