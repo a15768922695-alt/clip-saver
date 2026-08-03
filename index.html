@@ -11,11 +11,11 @@
 <title>随手收藏</title>
 <script>
   // 版本不符则强制硬刷新，防止 iPhone 卡在旧缓存（竖缩略图等问题根源）
-  (function(){try{var V='20';if(localStorage.getItem('clipVer')!==V){localStorage.setItem('clipVer',V);location.reload(true);}}catch(e){}})();
+  (function(){try{var V='21';if(localStorage.getItem('clipVer')!==V){localStorage.setItem('clipVer',V);location.reload(true);}}catch(e){}})();
 </script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-apple.png">
-<link rel="stylesheet" href="styles.css?v=20">
+<link rel="stylesheet" href="styles.css?v=21">
 </head>
 <body>
 <div id="app">
@@ -106,6 +106,9 @@
       <p>一个放在手机首页的私人截图收纳盒。上传截图 → 裁剪 → 自动分类 → 保存。</p>
       <p><b>添加到主屏幕：</b>在 iPhone 的 Safari 打开本页面 → 点底部「分享」按钮 →「添加到主屏幕」。</p>
       <p>数据保存在本机浏览器（IndexedDB），<b>不上传任何服务器</b>。可随时导出备份。</p>
+      <p class="warn">⚠️ <b>本应用没有云端，不会自动同步。</b>数据只存在"你打开它的那台设备"里——手机和电脑是<b>两份独立副本</b>，不同网址之间也互不相通。</p>
+      <p><b>把数据从一台设备搬到另一台：</b></p>
+      <p>① 在<b>有数据的那台</b>打开应用 → 本页点「导出备份」→ 用分享面板发到微信/邮件/隔空投送；<br>② 在<b>另一台</b>打开应用 → 本页点「导入备份」→ 选中那个 JSON 即可合并。</p>
       <hr>
       <p class="muted">分类：电影/剧集 · 书籍 · 穿搭好物 · 美食 · 文字摘抄 · 其他</p>
       <button id="exportBtn" class="btn">⬇️ 导出备份 (JSON)</button>
@@ -213,8 +216,8 @@
     </div>
   </div>
 
-  <div class="ver">v20</div>
+  <div class="ver">v21</div>
 </div>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

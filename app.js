@@ -1019,10 +1019,18 @@
     // 关于：导出 / 导入
     $('#exportBtn').addEventListener('click', async () => {
       const items = await getAll();
-      const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+      const json = JSON.stringify(items, null, 2);
+      const fileName = 'clip-saver-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      const blob = new Blob([json], { type: 'application/json' });
+      const file = new File([blob], fileName, { type: 'application/json' });
+      // iPhone：用原生分享面板，可直接发微信/邮件/隔空投送（普通下载在 Safari 经常失败）
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: '随手收藏备份' }); return; }
+        catch (e) { if (e && e.name === 'AbortError') return; /* 用户取消则回落下载 */ }
+      }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'clip-saver-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      a.download = fileName;
       a.click();
     });
     $('#importBtn').addEventListener('click', () => $('#importFile').click());
