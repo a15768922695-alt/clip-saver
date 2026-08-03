@@ -11,7 +11,7 @@
 <title>随手收藏</title>
 <script>
   // 版本不符则强制硬刷新，防止 iPhone 卡在旧缓存（竖缩略图等问题根源）
-  (function(){try{var V='19';if(localStorage.getItem('clipVer')!==V){localStorage.setItem('clipVer',V);location.reload(true);}}catch(e){}})();
+  (function(){try{var V='20';if(localStorage.getItem('clipVer')!==V){localStorage.setItem('clipVer',V);location.reload(true);}}catch(e){}})();
 </script>
 <style>
 :root{
@@ -138,7 +138,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
   background:#fff;border-radius:14px;padding:12px 14px;font-size:15px;outline:none;
   font-family:inherit;transition:border-color .15s,box-shadow .15s;}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(99,102,241,.1);}
-.field textarea{resize:vertical;min-height:100px;}
+.field textarea{resize:none;min-height:100px;overflow:hidden;transition:height .12s ease;}
 .title-row{display:flex;gap:10px;align-items:center;}
 .title-row input{flex:1;}
 .title-row .btn{flex:0 0 auto;white-space:nowrap;}
@@ -169,7 +169,8 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .detail .tag{display:inline-block;font-size:12px;background:var(--primary-light);color:var(--primary-d);
   border-radius:8px;padding:4px 10px;margin:0 6px 6px 0;font-weight:600;}
 .detail .text{white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.85;
-  color:#374151;margin-top:14px;user-select:text;-webkit-user-select:text;}
+  color:#374151;margin-top:14px;padding:12px 14px;background:var(--primary-light);border-left:4px solid var(--primary);
+  border-radius:10px;user-select:text;-webkit-user-select:text;}
 .detail .time{font-size:12px;color:var(--muted);margin-top:14px;}
 .detail-actions{margin-top:16px;}
 
@@ -331,10 +332,13 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
       <input id="file" type="file" accept="image/*" multiple hidden>
       <p class="hint-line">可一次多选多张图片（如家装同一套图）</p>
       <label class="field">
-        <span>文字内容（想记的话直接粘这里）</span>
-        <textarea id="text" rows="5" placeholder="比如一句想存的话、一段文案、读书笔记…"></textarea>
+        <span>📝 笔记（随手记，自动保存草稿）</span>
+        <textarea id="text" rows="5" placeholder="比如一句想存的话、一段文案、读书笔记…输入会自动保存，不怕误关丢失"></textarea>
         <div class="row between">
-          <button id="copyBtn" class="btn tiny" type="button">📋 复制文字</button>
+          <div>
+            <button id="copyBtn" class="btn tiny" type="button">📋 复制文字</button>
+            <button id="clearDraftBtn" class="btn tiny ghost" type="button" style="margin-left:6px;">🧹 清草稿</button>
+          </div>
           <span id="autoHint" class="auto-hint"></span>
         </div>
       </label>
@@ -484,7 +488,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     </div>
   </div>
 
-  <div class="ver">v19-standalone</div>
+  <div class="ver">v20-standalone</div>
 </div>
 <script>
 (function () {
@@ -1258,10 +1262,18 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
   }
 
   // ---------- 表单 ----------
+  function autoGrow() {
+    const ta = $('#text');
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 420) + 'px';
+  }
   function resetForm() {
     editingId = null; draftImages = [];
     $('#title').value = ''; $('#tags').value = ''; $('#text').value = ''; $('#link').value = '';
     $('#category').value = 'other'; $('#autoHint').textContent = '';
+    autoGrow();
+    clearDraft();
     renderPreview();
     updateSaveState();
   }
@@ -1305,11 +1317,12 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
     rebuildCategorySelect();
     renderPreview();
     await renderFilters(); render();
+    restoreDraft();
 
     // tab
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
       showView(t.dataset.view);
-      if (t.dataset.view === 'add') renderPreview();
+      if (t.dataset.view === 'add') { renderPreview(); autoGrow(); }
     }));
 
     // 筛选
@@ -1442,9 +1455,46 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
       const title = $('#title').value.trim();
       $('#autoHint').textContent = (text && !title) ? '可点「从文字选」挑标题' : '';
     }
+
+    // ---------- 笔记自动草稿（防误关/刷新丢失） ----------
+    const DRAFT_KEY = 'clipSaverDraft';
+    function saveDraft() {
+      if (editingId != null) return; // 编辑已有条目时不存草稿
+      try {
+        const d = {
+          text: $('#text').value, title: $('#title').value, link: $('#link').value,
+          tags: $('#tags').value, category: $('#category').value
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+        const t = $('#autoHint'); t.textContent = '✓ 已自动保存草稿';
+        setTimeout(() => { if (t.textContent === '✓ 已自动保存草稿') t.textContent = ''; }, 1500);
+      } catch (_) {}
+    }
+    function restoreDraft() {
+      if (editingId != null) return;
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        let any = false;
+        if (d.text) { $('#text').value = d.text; any = true; }
+        if (d.title) { $('#title').value = d.title; any = true; }
+        if (d.link) { $('#link').value = d.link; any = true; }
+        if (d.tags) { $('#tags').value = d.tags; any = true; }
+        if (d.category) { $('#category').value = d.category; any = true; }
+        if (any) { $('#autoHint').textContent = '已恢复上次草稿'; updateSaveState(); autoGrow(); }
+      } catch (_) {}
+    }
+    function clearDraft() {
+      try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+      $('#autoHint').textContent = '';
+    }
+    $('#clearDraftBtn').addEventListener('click', () => {
+      if (confirm('清除当前草稿？已保存的收藏不受影响。')) { clearDraft(); resetForm(); }
+    });
     $('#saveBtn').addEventListener('click', save);
     // 链接/标题/文字任一有内容即可保存（支持只存链接不传图）
-    ['#title', '#link', '#text'].forEach(sel => $(sel).addEventListener('input', () => { updateSaveState(); updateAutoHint(); }));
+    ['#title', '#link', '#text', '#tags', '#category'].forEach(sel => $(sel).addEventListener('input', () => { updateSaveState(); updateAutoHint(); saveDraft(); autoGrow(); }));
 
     // 详情操作
     $('#editBtn').addEventListener('click', () => { if (state.currentId != null) getById(state.currentId).then(loadToForm); });

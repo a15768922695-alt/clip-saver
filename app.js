@@ -763,10 +763,18 @@
   }
 
   // ---------- 表单 ----------
+  function autoGrow() {
+    const ta = $('#text');
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 420) + 'px';
+  }
   function resetForm() {
     editingId = null; draftImages = [];
     $('#title').value = ''; $('#tags').value = ''; $('#text').value = ''; $('#link').value = '';
     $('#category').value = 'other'; $('#autoHint').textContent = '';
+    autoGrow();
+    clearDraft();
     renderPreview();
     updateSaveState();
   }
@@ -810,11 +818,12 @@
     rebuildCategorySelect();
     renderPreview();
     await renderFilters(); render();
+    restoreDraft();
 
     // tab
     document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
       showView(t.dataset.view);
-      if (t.dataset.view === 'add') renderPreview();
+      if (t.dataset.view === 'add') { renderPreview(); autoGrow(); }
     }));
 
     // 筛选
@@ -947,9 +956,46 @@
       const title = $('#title').value.trim();
       $('#autoHint').textContent = (text && !title) ? '可点「从文字选」挑标题' : '';
     }
+
+    // ---------- 笔记自动草稿（防误关/刷新丢失） ----------
+    const DRAFT_KEY = 'clipSaverDraft';
+    function saveDraft() {
+      if (editingId != null) return; // 编辑已有条目时不存草稿
+      try {
+        const d = {
+          text: $('#text').value, title: $('#title').value, link: $('#link').value,
+          tags: $('#tags').value, category: $('#category').value
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+        const t = $('#autoHint'); t.textContent = '✓ 已自动保存草稿';
+        setTimeout(() => { if (t.textContent === '✓ 已自动保存草稿') t.textContent = ''; }, 1500);
+      } catch (_) {}
+    }
+    function restoreDraft() {
+      if (editingId != null) return;
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        let any = false;
+        if (d.text) { $('#text').value = d.text; any = true; }
+        if (d.title) { $('#title').value = d.title; any = true; }
+        if (d.link) { $('#link').value = d.link; any = true; }
+        if (d.tags) { $('#tags').value = d.tags; any = true; }
+        if (d.category) { $('#category').value = d.category; any = true; }
+        if (any) { $('#autoHint').textContent = '已恢复上次草稿'; updateSaveState(); autoGrow(); }
+      } catch (_) {}
+    }
+    function clearDraft() {
+      try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+      $('#autoHint').textContent = '';
+    }
+    $('#clearDraftBtn').addEventListener('click', () => {
+      if (confirm('清除当前草稿？已保存的收藏不受影响。')) { clearDraft(); resetForm(); }
+    });
     $('#saveBtn').addEventListener('click', save);
     // 链接/标题/文字任一有内容即可保存（支持只存链接不传图）
-    ['#title', '#link', '#text'].forEach(sel => $(sel).addEventListener('input', () => { updateSaveState(); updateAutoHint(); }));
+    ['#title', '#link', '#text', '#tags', '#category'].forEach(sel => $(sel).addEventListener('input', () => { updateSaveState(); updateAutoHint(); saveDraft(); autoGrow(); }));
 
     // 详情操作
     $('#editBtn').addEventListener('click', () => { if (state.currentId != null) getById(state.currentId).then(loadToForm); });

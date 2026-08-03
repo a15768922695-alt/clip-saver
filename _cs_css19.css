@@ -122,7 +122,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
   background:#fff;border-radius:14px;padding:12px 14px;font-size:15px;outline:none;
   font-family:inherit;transition:border-color .15s,box-shadow .15s;}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(99,102,241,.1);}
-.field textarea{resize:none;min-height:100px;overflow:hidden;transition:height .12s ease;}
+.field textarea{resize:vertical;min-height:100px;}
 .title-row{display:flex;gap:10px;align-items:center;}
 .title-row input{flex:1;}
 .title-row .btn{flex:0 0 auto;white-space:nowrap;}
@@ -153,8 +153,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .detail .tag{display:inline-block;font-size:12px;background:var(--primary-light);color:var(--primary-d);
   border-radius:8px;padding:4px 10px;margin:0 6px 6px 0;font-weight:600;}
 .detail .text{white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.85;
-  color:#374151;margin-top:14px;padding:12px 14px;background:var(--primary-light);border-left:4px solid var(--primary);
-  border-radius:10px;user-select:text;-webkit-user-select:text;}
+  color:#374151;margin-top:14px;user-select:text;-webkit-user-select:text;}
 .detail .time{font-size:12px;color:var(--muted);margin-top:14px;}
 .detail-actions{margin-top:16px;}
 
