@@ -420,8 +420,8 @@
       const hasText = !!(it.text || '').trim();
       const hasLink = !!(it.link || '').trim();
       const isLinkOnly = !imgs.length && !hasText && hasLink;
-      const thumbSrc = imgs[0] || (hasText ? generateTextThumb(it.text, c.color) : (it.thumb || ''));
-      const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">' + (isLinkOnly ? '🔗' : '📝') + '</div>';
+      const thumbSrc = imgs[0] || (hasText ? generateTextThumb(it.text, c.color) : (isLinkOnly ? generateLinkThumb(it.link, c.color) : (it.thumb || '')));
+      const thumb = thumbSrc ? '<img class="thumb" src="' + thumbSrc + '">' : '<div class="thumb empty">📝</div>';
       const sub = isLinkOnly ? '' : ((it.text || '').replace(/\n/g, ' ').slice(0, 80) || (it.tags || []).join(' ') || (hasLink ? '🔗 ' + it.link : '') || '');
       return '<div class="card" data-id="' + it.id + '">' + thumb +
         '<div class="body">' + chip(it.category) +
@@ -635,6 +635,43 @@
     if (line && lines.length < 4) lines.push(line);
     let y = 14;
     for (const l of lines) { ctx.fillText(l, 8, y); y += lineH; }
+    return c.toDataURL('image/jpeg', 0.92);
+  }
+
+  // 链接缩略图：和文字条目保持统一的小方形风格，避免竖长占位
+  function generateLinkThumb(link, color) {
+    const size = 112;
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = hexToRgba(color || '#6c5ce7', 0.9);
+    ctx.fillRect(0, 0, size, 4);
+    // 中间画一个链接图标
+    ctx.strokeStyle = '#636e72';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    const cx = size / 2, cy = size / 2;
+    // 左下链环
+    ctx.beginPath();
+    ctx.ellipse(cx - 12, cy + 2, 14, 8, Math.PI / 4, 0, Math.PI * 2);
+    ctx.stroke();
+    // 右上链环
+    ctx.beginPath();
+    ctx.ellipse(cx + 12, cy - 2, 14, 8, Math.PI / 4, 0, Math.PI * 2);
+    ctx.stroke();
+    // 底部显示域名前几个字符
+    let host = '';
+    try { host = new URL(link).hostname.replace(/^www\./, ''); } catch (e) {}
+    if (host) {
+      ctx.fillStyle = '#b2bec3';
+      ctx.font = '10px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const label = host.length > 10 ? host.slice(0, 10) + '…' : host;
+      ctx.fillText(label, cx, size - 22);
+    }
     return c.toDataURL('image/jpeg', 0.92);
   }
 
