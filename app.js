@@ -426,7 +426,7 @@
       return '<div class="card" data-id="' + it.id + '">' + thumb +
         '<div class="body">' + chip(it.category) +
         '<div class="ttl">' + escapeHtml(titleOf(it)) + '</div>' +
-        '<div class="sub">' + escapeHtml(sub) + '</div></div>' +
+        (sub ? '<div class="sub">' + escapeHtml(sub) + '</div>' : '') + '</div>' +
         '<button class="del" type="button" data-id="' + it.id + '" aria-label="删除">×</button>' +
       '</div>';
     }).join('');

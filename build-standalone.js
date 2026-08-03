@@ -7,9 +7,9 @@ let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 let js = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 
-// 1. 内联 CSS
+// 1. 内联 CSS（兼容带 ?v=x 缓存戳的链接）
 html = html.replace(
-  /<link rel="stylesheet" href="styles\.css">/,
+  /<link rel="stylesheet" href="styles\.css(?:\?v=\d+)?">/,
   '<style>\n' + css + '\n</style>'
 );
 
@@ -60,7 +60,7 @@ js = js.replace(
 );
 
 html = html.replace(
-  /<script src="app\.js"><\/script>/,
+  /<script src="app\.js(?:\?v=\d+)?"><\/script>/,
   '<script>\n' + js + '\n</script>'
 );
 
@@ -69,7 +69,7 @@ html = html.replace(/<link rel="manifest" href="manifest\.webmanifest">\n/, '');
 html = html.replace(/<link rel="apple-touch-icon" href="icon-apple\.png">\n/, '');
 
 // 4. 版本号提示改为 standalone
-html = html.replace(/<div class="ver">v\d+<\/div>/, '<div class="ver">v16-standalone</div>');
+html = html.replace(/<div class="ver">v\d+<\/div>/, '<div class="ver">v17-standalone</div>');
 
 fs.writeFileSync(path.join(root, 'clip-saver-standalone.html'), html, 'utf8');
 console.log('clip-saver-standalone.html generated:', html.length, 'chars');
