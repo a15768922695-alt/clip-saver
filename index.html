@@ -9,9 +9,13 @@
 <meta name="apple-mobile-web-app-title" content="收藏夹">
 <meta name="theme-color" content="#6c5ce7">
 <title>随手收藏</title>
+<script>
+  // 版本不符则强制硬刷新，防止 iPhone 卡在旧缓存（竖缩略图等问题根源）
+  (function(){try{var V='18';if(localStorage.getItem('clipVer')!==V){localStorage.setItem('clipVer',V);location.reload(true);}}catch(e){}})();
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-apple.png">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
 <div id="app">
@@ -206,8 +210,8 @@
     </div>
   </div>
 
-  <div class="ver">v17</div>
+  <div class="ver">v18</div>
 </div>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

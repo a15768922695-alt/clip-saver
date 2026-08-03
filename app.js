@@ -985,7 +985,7 @@
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!swReloaded) { swReloaded = true; location.reload(); }
       });
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js?v=18').catch(() => {}));
     }
   }
 
